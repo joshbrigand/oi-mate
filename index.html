@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Oi Mate. — Site Manager & Job Tracker</title>
+  <meta name="description" content="Scan a room's QR tag to see the brief, or run the whole site from the owner dashboard.">
+  <meta name="theme-color" content="#14070E">
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Oi Mate">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <style>
+    /* ---------- animatable colours, so moods cross-fade instead of snapping ---------- */
+    @property --base { syntax:'<color>'; inherits:true; initial-value:#3A0D1E; }
+    @property --c1   { syntax:'<color>'; inherits:true; initial-value:#D13FA6; }
+    @property --c2   { syntax:'<color>'; inherits:true; initial-value:#FF4F9E; }
+    @property --c3   { syntax:'<color>'; inherits:true; initial-value:#FF7A66; }
+    @property --c4   { syntax:'<color>'; inherits:true; initial-value:#FFA08C; }
+    @property --dark { syntax:'<color>'; inherits:true; initial-value:#14070E; }
+
+    :root{
+      --t2:rgba(255,255,255,.78);
+      --t3:rgba(255,255,255,.52);
+      --line:rgba(255,255,255,.14);
+    }
+    html,body{ background:#14070E; }
+    body{
+      font-family:'Inter',system-ui,-apple-system,sans-serif;
+      color:#fff;
+      -webkit-font-smoothing:antialiased;
+    }
+    .serif{ font-family:'Instrument Serif', Georgia, 'Times New Roman', serif; font-weight:400; letter-spacing:-0.02em; }
+    .hero{ font-size:clamp(50px, 15.5vw, 68px); line-height:.96; letter-spacing:-0.03em; }
+    .t2{ color:var(--t2); } .t3{ color:var(--t3); }
+    [x-cloak]{ display:none !important; }
+
+    /* ---------- the breathing gradient field ---------- */
+    .field{
+      position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+      background:var(--base);
+      transition: --base 1.8s ease, --c1 1.8s ease, --c2 1.8s ease, --c3 1.8s ease, --c4 1.8s ease, --dark 1.8s ease;
+    }
+    .field[data-mood="ember"]{ --base:#3A0D1E; --c1:#D13FA6; --c2:#FF4F9E; --c3:#FF7A66; --c4:#FFA08C; --dark:#14070E; }
+    .field[data-mood="dusk"] { --base:#1A1646; --c1:#C79BFF; --c2:#5B3BD6; --c3:#6FE3B4; --c4:#FF4F9A; --dark:#0C0922; }
+    .field[data-mood="amber"]{ --base:#3B2616; --c1:#C9A85A; --c2:#E9954A; --c3:#A9B85A; --c4:#F0B27A; --dark:#160D06; }
+
+    /* one shared inhale/exhale for the whole composition */
+    .breath{ position:absolute; inset:-12%; transform-origin:50% 55%; animation:inhale 10s ease-in-out infinite; will-change:transform; }
+    @keyframes inhale{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.1); } }
+
+    .orb{ position:absolute; border-radius:9999px; aspect-ratio:1; width:min(130vw, 820px); will-change:transform; }
+    .o1{ top:-6%;  left:-24%;  background:radial-gradient(closest-side, var(--c1), transparent); animation:driftA 17s ease-in-out infinite; }
+    .o2{ top:10%;  right:-40%; background:radial-gradient(closest-side, var(--c2), transparent); animation:driftB 21s ease-in-out infinite; }
+    .o3{ top:40%;  left:-34%;  background:radial-gradient(closest-side, var(--c3), transparent); animation:driftC 24s ease-in-out infinite; }
+    .o4{ bottom:-14%; right:-30%; background:radial-gradient(closest-side, var(--c4), transparent); animation:driftD 19s ease-in-out infinite; }
+    .o5{ top:20%;  left:0%; width:min(100vw, 640px); opacity:.9; background:radial-gradient(closest-side, var(--dark), transparent); animation:driftB 27s ease-in-out infinite reverse; }
+    @keyframes driftA{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(9%,11%,0) scale(1.14);} }
+    @keyframes driftB{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(-11%,7%,0) scale(1.1);} }
+    @keyframes driftC{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(8%,-10%,0) scale(1.16);} }
+    @keyframes driftD{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(-8%,-7%,0) scale(1.12);} }
+
+    .veil{ position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.06) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.40) 100%); }
+    .grain{
+      position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.16; mix-blend-mode:overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+    }
+
+    /* ---------- glass + controls ---------- */
+    .glass{
+      background:rgba(18,10,22,.42);
+      -webkit-backdrop-filter:blur(22px) saturate(1.15); backdrop-filter:blur(22px) saturate(1.15);
+      border:1px solid var(--line); border-radius:28px;
+    }
+    .btn-white{
+      background:#fff; color:#1B1020; border-radius:9999px; font-weight:600; font-size:15px;
+      padding:15px 22px; box-shadow:0 14px 34px -14px rgba(0,0,0,.55); transition:transform .15s ease, opacity .15s ease;
+    }
+    .btn-white:active{ transform:scale(.98); }
+    .btn-glass{
+      background:rgba(20,10,24,.30); border:1px solid rgba(255,255,255,.28); color:#fff; border-radius:9999px;
+      font-weight:600; font-size:15px; padding:15px 22px;
+      -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); transition:background .15s ease;
+    }
+    .btn-glass:active{ background:rgba(20,10,24,.45); }
+    .pill-sm{
+      background:rgba(255,255,255,.14); border:1px solid var(--line); border-radius:9999px;
+      font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:8px 14px;
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    }
+    .chip{
+      background:rgba(255,255,255,.10); border:1px solid var(--line); border-radius:9999px;
+      font-size:12px; padding:6px 12px; color:#fff;
+    }
+    .round-btn{
+      width:40px; height:40px; border-radius:9999px; display:flex; align-items:center; justify-content:center;
+      background:rgba(255,255,255,.14); border:1px solid var(--line);
+      -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+    }
+    .lbl{ font-size:12px; font-weight:600; color:var(--t2); display:block; margin-bottom:6px; }
+    .input{
+      width:100%; padding:13px 14px; font-size:14px; color:#fff; color-scheme:dark;
+      background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:16px;
+    }
+    .input::placeholder{ color:rgba(255,255,255,.40); }
+    .input:focus{ outline:none; border-color:rgba(255,255,255,.55); box-shadow:0 0 0 3px rgba(255,255,255,.12); }
+    .input::file-selector-button{ background:rgba(255,255,255,.16); color:#fff; border:0; border-radius:9999px; padding:6px 12px; margin-right:10px; font-weight:600; }
+
+    .scrim{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; padding:16px; background:rgba(10,4,14,.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+    @media (min-width:640px){ .scrim{ align-items:center; } }
+    .sheet{
+      width:100%; max-width:384px; padding:22px; border-radius:32px; color:#fff;
+      background:rgba(24,14,30,.86); border:1px solid var(--line);
+      -webkit-backdrop-filter:blur(30px); backdrop-filter:blur(30px);
+      max-height:90vh; overflow-y:auto;
+    }
+
+    .check{
+      flex:none; width:26px; height:26px; border-radius:9999px; display:flex; align-items:center; justify-content:center;
+      border:1.5px solid rgba(255,255,255,.6); color:transparent; transition:all .2s ease;
+    }
+    .check.on{ background:#fff; border-color:#fff; color:#1B1020; }
+
+    .nav-item{ flex:1; padding:11px 0; border-radius:9999px; font-size:13px; font-weight:600; color:var(--t2); transition:background .2s ease, color .2s ease; }
+    .nav-item.on{ background:rgba(255,255,255,.20); color:#fff; }
+
+    /* logo chip — rings out on the same 10s breath as the background */
+    .logo{ position:relative; width:40px; height:40px; border-radius:9999px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.18); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+    .logo::before{ content:''; position:absolute; inset:-5px; border-radius:9999px; border:1.5px solid rgba(255,255,255,.55); animation:ringBreath 10s ease-in-out infinite; }
+    .logo i{ position:relative; display:block; width:16px; height:16px; border-radius:9999px; border:2px solid #fff; }
+    .logo i::after{ content:''; position:absolute; inset:3px; border-radius:9999px; background:#fff; }
+    @keyframes ringBreath{ 0%,100%{ transform:scale(.9); opacity:.6; } 50%{ transform:scale(1.2); opacity:0; } }
+
+    @media (prefers-reduced-motion: reduce){
+      .breath, .orb, .logo::before{ animation:none !important; }
+      .field{ transition:none; }
+    }
+
+    .btn-danger{ background:rgba(229,72,77,.16); border:1px solid rgba(255,140,140,.45); color:#FFC2BF; border-radius:9999px; font-weight:600; font-size:15px; padding:15px 22px; }
+    .chip.on{ background:#fff; color:#1B1020; border-color:#fff; font-weight:600; }
+    .tag{ position:relative; border-radius:28px; padding:12px; text-align:center; background:rgba(255,255,255,.08); border:2px solid transparent; outline:1px solid var(--line); transition:border-color .15s ease, background .15s ease; cursor:pointer; }
+    .tag.sel{ border-color:#fff; background:rgba(255,255,255,.16); }
+    .tag .tick{ position:absolute; top:10px; right:10px; width:24px; height:24px; border-radius:9999px; border:1.5px solid rgba(255,255,255,.6); display:flex; align-items:center; justify-content:center; color:transparent; }
+    .tag.sel .tick{ background:#fff; border-color:#fff; color:#1B1020; }
+    .qr svg, .qr img{ display:block; width:100%; height:auto; }
+
+    /* ---------- printing: stickers only, no headers/footers, never cut off ---------- */
+    #printArea{ display:none; }
+    @page{ size:A4 portrait; margin:0; }
+    @media print{
+      html,body{ background:#fff !important; margin:0; }
+      .screen-only{ display:none !important; }
+      #printArea{ display:block !important; padding:10mm; text-align:center; font-size:0; line-height:0; }
+      .sticker{
+        display:inline-flex; flex-direction:column; align-items:center; justify-content:space-between; vertical-align:top;
+        box-sizing:border-box; width:var(--s); height:var(--s); margin:2mm; padding:calc(var(--s) * .07);
+        border:.35mm dashed #9a9a9a; border-radius:4mm; background:#fff; color:#111; text-align:center;
+        break-inside:avoid; page-break-inside:avoid; line-height:1.1;
+      }
+      .st-name{ font-size:calc(var(--s) * .085); line-height:1.05; }
+      .st-qr{ width:calc(var(--s) * .62); }
+      .st-id{ font-family:ui-monospace, Menlo, monospace; font-size:calc(var(--s) * .045); }
+      .st-tag{ font-size:calc(var(--s) * .04); letter-spacing:.04em; color:#444; }
+    }
+  </style>
+
+  <script>
+    function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('oimate-files', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+    async function idbPut(k, v){ const db = await idb(); return new Promise((res, rej) => { const t = db.transaction('files', 'readwrite'); t.objectStore('files').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
+    async function idbGet(k){ const db = await idb(); return new Promise((res, rej) => { const q = db.transaction('files').objectStore('files').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+
+    window.appData = function () {
+      return {
+        viewMode: 'owner',          // 'owner' | 'tradie'
+        currentView: 'dashboard',   // 'dashboard' | 'roomDetail' | 'team'
+        activeRoomId: null,
+        lastRoomId: null,
+        roomToDelete: null,
+        lockedToRoom: false,        // true only when opened from a scanned QR link
+        toast: null,
+
+        showAddRoomModal: false,
+        showDeleteRoomModal: false,
+        showAddTradeModal: false,
+        showAddTaskModal: false,
+        showQrPreviewModal: false,
+        showQrSheetModal: false,
+        showNotifyModal: false,
+        notifyList: [], notifyRoom: null, notifyTask: null,
+        selectedTagIds: [], stickerSize: 150,
+        editingTradieId: null,
+
+        roomPresets: ['Main Bathroom', 'Living Room', 'Kitchen', 'Laundry', 'Master Bedroom', 'Deck / Patio', 'Garage'],
+        tradeOptions: ['Plumber', 'Sparky (Electrician)', 'Tiler', 'Carpenter', 'Painter', 'Concreter', 'Waterproofer', 'Flooring', 'Cabinet Maker'],
+
+        newRoom: { name: '', customQrId: '' },
+        newTrade: { name: '', trade: '', phone: '', email: '' },
+        newTask: { title: '', desc: '', tradeIds: [], scheduledAt: '', fileName: '' },
+        editingTaskId: null,
+
+        tradies: [
+          { id: 'tr-1', name: 'Dave', trade: 'Plumber', phone: '0412345678' },
+          { id: 'tr-2', name: 'Chris', trade: 'Sparky (Electrician)', phone: '0498765432' },
+          { id: 'tr-3', name: 'Sam', trade: 'Flooring', phone: '0433221100' }
+        ],
+
+        rooms: [
+          {
+            id: 'bath-101', name: 'Main Bathroom', qrCodeId: 'QR-BATH-101',
+            tasks: [
+              { id: 't1', title: 'Rough-in plumbing for double vanity', desc: 'Waste pipe marked in yellow spray paint. Needs 100mm drop.', tradeIds: ['tr-1'], fileName: 'vanity-layout.pdf', done: true, timestamp: '10 Aug, 8:30 AM' }
+            ]
+          },
+          {
+            id: 'kitch-102', name: 'Kitchen', qrCodeId: 'STICKER-BN-99',
+            tasks: [
+              { id: 't2', title: 'Run 32A dedicated circuit for cooktop', desc: 'Pendant light cables centered to island markings.', tradeIds: ['tr-2'], fileName: '', done: false, timestamp: '10 Aug, 10:15 AM' }
+            ]
+          },
+          { id: 'living-103', name: 'Living Room', qrCodeId: 'QR-LIV-103', tasks: [] }
+        ],
+
+        // ---------------- lifecycle ----------------
+        initApp() {
+          try {
+            const saved = localStorage.getItem('oimate_data_v2');
+            if (saved) {
+              const parsed = JSON.parse(saved);
+              if (parsed.rooms?.length) this.rooms = parsed.rooms;
+              if (parsed.tradies) this.tradies = parsed.tradies;
+            }
+          } catch (e) { console.warn('Could not restore saved data:', e); }
+
+          this.rooms.forEach(r => r.tasks.forEach(t => { if (!t.tradeIds) { t.tradeIds = t.tradeId ? [t.tradeId] : []; delete t.tradeId; } }));
+          this.$watch('rooms', () => this.persist());
+          this.$watch('tradies', () => this.persist());
+
+          // A tradie arriving from a scanned QR link (#/r/room-id) is locked to that room.
+          // Normal in-app navigation never touches the URL hash, so the owner is never locked.
+          this.handleScan();
+          window.addEventListener('hashchange', () => this.handleScan());
+          window.addEventListener('popstate', (e) => this.onPop(e));
+          if (!this.lockedToRoom) {
+            try { history.replaceState({ view: 'dashboard', roomId: null }, ''); } catch (e) {}
+          }
+
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+          }
+        },
+        persist() {
+          try { localStorage.setItem('oimate_data_v2', JSON.stringify({ rooms: this.rooms, tradies: this.tradies })); }
+          catch (e) { console.warn('Could not save data:', e); }
+        },
+
+        handleScan() {
+          const match = window.location.hash.match(/^#\/r\/(.+)$/);
+          if (!match) return;
+          const room = this.rooms.find(r => r.id === match[1]);
+          if (!room) return;
+          this.activeRoomId = room.id;
+          this.lastRoomId = room.id;
+          this.currentView = 'roomDetail';
+          this.viewMode = 'tradie';
+          this.lockedToRoom = true;
+        },
+        onPop(e) {
+          if (this.lockedToRoom) return;
+          this.closeAllModals();
+          const s = e.state;
+          if (s && s.view === 'roomDetail' && this.rooms.some(r => r.id === s.roomId)) {
+            this.currentView = 'roomDetail'; this.activeRoomId = s.roomId;
+          } else if (s && (s.view === 'team' || s.view === 'tags')) {
+            this.currentView = s.view; this.activeRoomId = null;
+          } else {
+            this.currentView = 'dashboard'; this.activeRoomId = null;
+          }
+        },
+
+        // ---------------- derived ----------------
+        get activeRoom() { return this.rooms.find(r => r.id === this.activeRoomId) || null; },
+        get mood() {
+          if (this.currentView === 'roomDetail') {
+            const i = this.rooms.findIndex(r => r.id === this.activeRoomId);
+            return ['dusk', 'amber', 'ember'][(i < 0 ? 0 : i) % 3];
+          }
+          if (this.currentView === 'team') return 'amber';
+          if (this.currentView === 'tags') return 'dusk';
+          return 'ember';
+        },
+        get greeting() {
+          const h = new Date().getHours();
+          if (h < 5) return 'Still up?';
+          if (h < 12) return 'Good morning.';
+          if (h < 17) return 'Good afternoon.';
+          if (h < 22) return 'Good evening.';
+          return 'Still up?';
+        },
+        get statusLine() {
+          if (this.rooms.length === 0) return 'Add your first room to begin.';
+          const total = this.totalTasksCount();
+          if (total === 0) return 'No tasks yet. Take a breath, then jot the first one down.';
+          const remaining = total - this.completedTasksCount();
+          if (remaining === 0) return 'Everything\u2019s ticked off. Nice work.';
+          const openRooms = this.rooms.filter(r => r.tasks.some(t => !t.done)).length;
+          return `${remaining} task${remaining === 1 ? '' : 's'} to go across ${openRooms} room${openRooms === 1 ? '' : 's'}.`;
+        },
+
+        tradieById(id) { return this.tradies.find(t => t.id === id) || null; },
+        roomTradies(room) {
+          if (!room) return [];
+          const ids = new Set(room.tasks.flatMap(t => t.tradeIds || []));
+          return [...ids].map(id => this.tradieById(id)).filter(Boolean);
+        },
+        openTasksFor(tradieId) {
+          return this.rooms.reduce((n, r) => n + r.tasks.filter(t => (t.tradeIds || []).includes(tradieId) && !t.done).length, 0);
+        },
+        roomUrl(room) { return window.location.origin + window.location.pathname + '#/r/' + room.id; },
+        qrImageUrl(room) { return 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=8&data=' + encodeURIComponent(this.roomUrl(room)); },
+
+        totalTasksCount() { return this.rooms.reduce((acc, r) => acc + r.tasks.length, 0); },
+        completedTasksCount() { return this.rooms.reduce((acc, r) => acc + r.tasks.filter(t => t.done).length, 0); },
+        houseProgressPercent() {
+          const total = this.totalTasksCount();
+          return total === 0 ? 0 : Math.round((this.completedTasksCount() / total) * 100);
+        },
+        roomProgressPercent(room) {
+          if (!room.tasks?.length) return 0;
+          return Math.round((room.tasks.filter(t => t.done).length / room.tasks.length) * 100);
+        },
+        roomDoneCount(room) { return room.tasks.filter(t => t.done).length; },
+
+        // ---------------- toast / modals ----------------
+        showToast(msg, action, actionLabel) {
+          this.toast = { msg, action: action || null, actionLabel: actionLabel || '' };
+          clearTimeout(this._toastTimer);
+          this._toastTimer = setTimeout(() => { this.toast = null; }, action ? 5000 : 2200);
+        },
+        runToastAction() {
+          if (this.toast?.action) this.toast.action();
+          this.toast = null;
+        },
+        closeAllModals() {
+          this.showAddRoomModal = false;
+          this.showDeleteRoomModal = false;
+          this.showAddTradeModal = false;
+          this.showAddTaskModal = false;
+          this.showQrPreviewModal = false;
+          this.showQrSheetModal = false;
+          this.showNotifyModal = false;
+        },
+
+        // ---------------- navigation ----------------
+        go(view, roomId = null) {
+          this.closeAllModals();
+          if (view === this.currentView && roomId === this.activeRoomId) return;
+          this.currentView = view;
+          this.activeRoomId = roomId;
+          if (roomId) this.lastRoomId = roomId;
+          if (!this.lockedToRoom) {
+            try { history.pushState({ view, roomId }, ''); } catch (e) {}
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        },
+        goDashboard() { if (!this.lockedToRoom) this.go('dashboard'); },
+        goTeam() { if (!this.lockedToRoom) this.go('team'); },
+        openRoomDetail(room) { this.go('roomDetail', room.id); },
+        openLastRoom() {
+          const room = this.rooms.find(r => r.id === this.lastRoomId) || this.rooms[0];
+          if (!room) return this.showToast('Add a room first.');
+          this.openRoomDetail(room);
+        },
+        openQrSheet() { this.goTags(); },
+
+        // ---------------- rooms ----------------
+        openAddRoomModal() { this.closeAllModals(); this.newRoom = { name: '', customQrId: '' }; this.showAddRoomModal = true; },
+        saveRoom() {
+          const name = this.newRoom.name.trim();
+          if (!name) return this.showToast('Give the room a name first.');
+          const id = 'rm-' + Date.now();
+          const qrId = this.newRoom.customQrId.trim() || 'QR-' + Math.floor(1000 + Math.random() * 9000);
+          const created = { id, name, qrCodeId: qrId, tasks: [] };
+          this.rooms.push(created);
+          this.showAddRoomModal = false;
+          this.openRoomDetail(created);
+        },
+        confirmDeleteRoom(room) { this.closeAllModals(); this.roomToDelete = room; this.showDeleteRoomModal = true; },
+        executeRoomDelete() {
+          if (this.roomToDelete) {
+            const wasActive = this.activeRoomId === this.roomToDelete.id;
+            if (this.lastRoomId === this.roomToDelete.id) this.lastRoomId = null;
+            this.rooms = this.rooms.filter(r => r.id !== this.roomToDelete.id);
+            if (wasActive) this.go('dashboard');
+          }
+          this.showDeleteRoomModal = false;
+          this.roomToDelete = null;
+        },
+
+        // ---------------- trade team ----------------
+        openAddTradeModal() { this.closeAllModals(); this.editingTradieId = null; this.newTrade = { name: '', trade: '', phone: '', email: '' }; this.showAddTradeModal = true; },
+        openEditTradeModal(t) { this.closeAllModals(); this.editingTradieId = t.id; this.newTrade = { name: t.name, trade: t.trade, phone: t.phone || '', email: t.email || '' }; this.showAddTradeModal = true; },
+        saveTradie() {
+          if (!this.newTrade.name.trim() || !this.newTrade.trade) return this.showToast('Add a name and trade.');
+          const data = { name: this.newTrade.name.trim(), trade: this.newTrade.trade, phone: (this.newTrade.phone || '').trim(), email: (this.newTrade.email || '').trim() };
+          if (this.editingTradieId) {
+            const t = this.tradieById(this.editingTradieId);
+            if (t) Object.assign(t, data);
+            this.editingTradieId = null; this.showAddTradeModal = false;
+            return this.showToast('Saved.');
+          }
+          this.tradies.push({ id: 'tr-' + Date.now(), ...data });
+          this.showAddTradeModal = false;
+          this.showToast('Added to your team.');
+        },
+        removeTradie(id) {
+          if (confirm('Remove this tradie from your team? They\u2019ll be unassigned from any tasks.')) {
+            this.tradies = this.tradies.filter(t => t.id !== id);
+            this.rooms.forEach(r => r.tasks.forEach(t => { t.tradeIds = (t.tradeIds || []).filter(x => x !== id); }));
+          }
+        },
+        textTradie(tradie, room, task) {
+          const msg = task
+            ? `G'day ${tradie.name}, new job in ${room.name}: ${task.title}. Brief & plans: ${this.roomUrl(room)}`
+            : `G'day ${tradie.name}, here's your scope for ${room.name}: ${this.roomUrl(room)}`;
+          const sep = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
+          window.location.href = `sms:${tradie.phone}${sep}body=${encodeURIComponent(msg)}`;
+        },
+
+        // ---------------- tasks ----------------
+        openAddTaskModal() { this.closeAllModals(); this.editingTaskId = null; this._pendingFile = null; this.newTask = { title: '', desc: '', tradeIds: [], scheduledAt: '', fileName: '' }; this.showAddTaskModal = true; },
+        handleFileUpload(e) { const f = e.target.files[0]; if (f) { this._pendingFile = f; this.newTask.fileName = f.name; } },
+        async saveTask() {
+          const title = this.newTask.title.trim();
+          if (!title) return this.showToast('Give the task a title first.');
+          const room = this.activeRoom;
+          const existing = this.editingTaskId ? room.tasks.find(t => t.id === this.editingTaskId) : null;
+          const prevIds = existing ? [...(existing.tradeIds || [])] : [];
+          const tradeIds = [...this.newTask.tradeIds];
+          let attachment = existing?.attachment || null;
+          if (this._pendingFile) {
+            const f = this._pendingFile, id = 'f-' + Date.now();
+            try { await idbPut(id, { blob: f, name: f.name, type: f.type }); attachment = { id, name: f.name, type: f.type }; }
+            catch (e) { this.showToast('Couldn\u2019t store that file on this device.'); }
+            this._pendingFile = null;
+          }
+          const fields = { title, desc: this.newTask.desc, tradeIds, scheduledAt: this.newTask.scheduledAt || '', attachment, fileName: attachment ? attachment.name : (existing?.fileName || '') };
+          if (existing) Object.assign(existing, fields);
+          else room.tasks.unshift({ id: 'tsk-' + Date.now(), done: false, timestamp: 'Just now', ...fields });
+
+          const added = tradeIds.filter(id => !prevIds.includes(id)).map(id => this.tradieById(id)).filter(t => t && t.phone);
+          this.showAddTaskModal = false;
+          if (added.length === 1) { this.showToast(`Saved \u2014 notify ${added[0].name}?`, () => this.textTradie(added[0], room, fields), 'Text them'); return; }
+          if (added.length > 1) { this.showToast(`Saved \u2014 notify ${added.length} tradies?`, () => { this.notifyList = added; this.notifyRoom = room; this.notifyTask = fields; this.showNotifyModal = true; }, 'Choose'); return; }
+          this.showToast('Task saved.');
+        },
+        editTask(task) {
+          this.closeAllModals();
+          this.editingTaskId = task.id;
+          this._pendingFile = null;
+          this.newTask = { title: task.title, desc: task.desc || '', tradeIds: [...(task.tradeIds || [])], scheduledAt: task.scheduledAt || '', fileName: task.fileName || '' };
+          this.showAddTaskModal = true;
+        },
+        deleteTask(taskId) {
+          if (confirm('Delete this task?')) this.activeRoom.tasks = this.activeRoom.tasks.filter(t => t.id !== taskId);
+        },
+        toggleTaskDone(task) { task.done = !task.done; },
+        toggleTaskTradie(id) { const a = this.newTask.tradeIds; this.newTask.tradeIds = a.includes(id) ? a.filter(x => x !== id) : [...a, id]; },
+        taskTradieLabel(task) {
+          const names = (task.tradeIds || []).map(id => this.tradieById(id)).filter(Boolean).map(t => t.name + ' (' + t.trade.replace(/ \(.*\)/, '') + ')');
+          return names.length ? names.join(', ') : 'DIY / Owner';
+        },
+        fmtWhen(iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); },
+        get upcoming() {
+          const start = new Date(); start.setHours(0, 0, 0, 0);
+          const all = [];
+          this.rooms.forEach(room => room.tasks.forEach(task => { if (task.scheduledAt && !task.done && new Date(task.scheduledAt) >= start) all.push({ room, task }); }));
+          return all.sort((a, b) => new Date(a.task.scheduledAt) - new Date(b.task.scheduledAt)).slice(0, 2);
+        },
+        nextTask(room) {
+          const open = room.tasks.filter(t => !t.done);
+          if (!open.length) return null;
+          const sch = open.filter(t => t.scheduledAt).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+          return sch[0] || open[open.length - 1];
+        },
+        async openAttachment(task) {
+          const a = task.attachment;
+          if (!a) return this.showToast('Demo file \u2014 nothing stored to open.');
+          const w = window.open('', '_blank');
+          try {
+            const rec = await idbGet(a.id);
+            if (!rec) { if (w) w.close(); return this.showToast('This file lives on the device it was added from.'); }
+            const url = URL.createObjectURL(rec.blob);
+            if (w) w.location.href = url; else this.showToast('Allow pop-ups to open the file.');
+          } catch (e) { if (w) w.close(); this.showToast('Couldn\u2019t open that file.'); }
+        },
+        qrMarkup(room) {
+          try {
+            if (window.qrcode) {
+              const q = window.qrcode(0, 'M'); q.addData(this.roomUrl(room)); q.make();
+              const n = q.getModuleCount(), m = 3; let d = '';
+              for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (q.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+              return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n + 2 * m} ${n + 2 * m}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;
+            }
+          } catch (e) {}
+          return `<img src="${this.qrImageUrl(room)}" alt="">`;
+        },
+        goTags() { if (!this.lockedToRoom) this.go('tags'); },
+        get selectedRooms() { return this.rooms.filter(r => this.selectedTagIds.includes(r.id)); },
+        toggleTag(id) { this.selectedTagIds = this.selectedTagIds.includes(id) ? this.selectedTagIds.filter(x => x !== id) : [...this.selectedTagIds, id]; },
+        get pagesNeeded() { const per = this.stickerSize >= 150 ? 1 : 6; return Math.max(1, Math.ceil(this.selectedRooms.length / per)); },
+        async printSelected() {
+          if (!this.selectedRooms.length) return this.showToast('Tap at least one sticker first.');
+          await this.$nextTick();
+          const imgs = [...document.querySelectorAll('#printArea img')];
+          await Promise.all(imgs.map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; setTimeout(r, 4000); })));
+          window.print();
+        }
+      };
+    };
+  </script>
+</head>
+<body @keydown.escape.window="closeAllModals()">
+
+<div x-data="appData()" x-init="initApp()">
+
+  <!-- ============ BREATHING GRADIENT FIELD ============ -->
+  <div class="field screen-only" :data-mood="mood" aria-hidden="true">
+    <div class="breath">
+      <div class="orb o1"></div>
+      <div class="orb o2"></div>
+      <div class="orb o3"></div>
+      <div class="orb o4"></div>
+      <div class="orb o5"></div>
+    </div>
+    <div class="veil"></div>
+  </div>
+  <div class="grain screen-only" aria-hidden="true"></div>
+
+  <!-- print-only sticker sheet -->
+  <div id="printArea" aria-hidden="true">
+    <template x-for="r in selectedRooms" :key="r.id">
+      <div class="sticker" :style="'--s:' + stickerSize + 'mm'">
+        <div class="st-name serif" x-text="r.name"></div>
+        <div class="st-qr qr" x-html="qrMarkup(r)"></div>
+        <div class="st-id" x-text="r.qrCodeId"></div>
+        <div class="st-tag">Scan for the brief &middot; Oi Mate.</div>
+      </div>
+    </template>
+  </div>
+
+  <div class="screen-only relative z-10 mx-auto max-w-md min-h-screen flex flex-col px-6 pb-36">
+
+    <!-- TOAST -->
+    <div x-show="toast" x-cloak x-transition class="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass !rounded-full px-5 py-3 flex items-center gap-4 text-[13px] whitespace-nowrap" style="background:rgba(18,10,22,.88);">
+      <span x-text="toast?.msg"></span>
+      <button x-show="toast?.action" @click="runToastAction()" class="font-bold underline underline-offset-4" x-text="toast?.actionLabel"></button>
+    </div>
+
+    <!-- HEADER -->
+    <header class="flex items-center justify-between" style="padding-top:calc(1.25rem + env(safe-area-inset-top));">
+      <div class="flex items-center gap-3">
+        <div class="logo"><i></i></div>
+        <span class="serif text-[24px] leading-none">Oi Mate.</span>
+      </div>
+      <button x-show="!lockedToRoom" x-cloak @click="viewMode = viewMode === 'owner' ? 'tradie' : 'owner'" class="pill-sm" x-text="viewMode === 'owner' ? 'Owner' : 'Tradie'"></button>
+    </header>
+
+    <div x-show="lockedToRoom" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
+      Scanned tag &middot; showing this room only
+    </div>
+    <div x-show="!lockedToRoom && viewMode === 'tradie'" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl flex justify-between items-center t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
+      <span>Previewing what a tradie sees</span>
+      <button @click="viewMode = 'owner'" class="font-bold underline underline-offset-4 text-white">Exit</button>
+    </div>
+
+    <!-- ================= HOUSE ================= -->
+    <main x-show="currentView === 'dashboard'" x-cloak
+          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
+          class="flex-1 pt-12 space-y-8">
+
+      <section>
+        <h1 class="serif hero" x-text="greeting"></h1>
+        <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="statusLine"></p>
+
+        <div x-show="totalTasksCount() > 0" class="mt-6">
+          <div class="h-1 rounded-full overflow-hidden" style="background:rgba(255,255,255,.22);">
+            <div class="h-full rounded-full bg-white transition-all duration-700" :style="'width:' + houseProgressPercent() + '%'"></div>
+          </div>
+          <p class="t3 text-[12px] mt-2" x-text="houseProgressPercent() + '% complete'"></p>
+        </div>
+      </section>
+
+      <button @click="openAddRoomModal()" class="btn-white w-full flex items-center justify-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add a room
+      </button>
+
+      <section x-show="upcoming.length" x-cloak class="glass p-5 space-y-3">
+        <span class="t3 text-[12px] font-semibold uppercase tracking-widest">Coming up</span>
+        <template x-for="u in upcoming" :key="u.task.id">
+          <div class="flex items-baseline justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-semibold text-[15px] truncate" x-text="u.task.title"></p>
+              <p class="t2 text-[12px] truncate" x-text="u.room.name + ' · ' + taskTradieLabel(u.task)"></p>
+            </div>
+            <span class="t2 text-[12px] flex-none text-right" x-text="fmtWhen(u.task.scheduledAt)"></span>
+          </div>
+        </template>
+      </section>
+
+      <section class="space-y-3">
+        <div class="flex items-baseline justify-between px-1">
+          <h2 class="serif text-[30px] leading-none">Rooms</h2>
+          <span class="t3 text-[12px]" x-text="rooms.length + ' on site'"></span>
+        </div>
+
+        <template x-for="room in rooms" :key="room.id">
+          <button @click="openRoomDetail(room)" class="glass w-full text-left p-5 flex items-center gap-4 active:scale-[.99] transition">
+            <div class="flex-1 min-w-0">
+              <h3 class="serif text-[30px] leading-none truncate" x-text="room.name"></h3>
+              <p class="t2 text-[13px] mt-2.5" x-text="(room.tasks.length === 0 ? 'No tasks yet' : roomDoneCount(room) + ' of ' + room.tasks.length + ' done') + ' · ' + roomTradies(room).length + (roomTradies(room).length === 1 ? ' tradie' : ' tradies')"></p>
+              <p x-show="nextTask(room)" class="t3 text-[12px] mt-1 truncate" x-text="nextTask(room) ? 'Next: ' + nextTask(room).title : ''"></p>
+            </div>
+            <svg width="44" height="44" viewBox="0 0 44 44" class="flex-none">
+              <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="3"/>
+              <circle x-show="roomProgressPercent(room) > 0" cx="22" cy="22" r="18" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"
+                      :stroke-dasharray="(roomProgressPercent(room) * 1.131) + ' 113.1'" transform="rotate(-90 22 22)"/>
+            </svg>
+          </button>
+        </template>
+
+        <div x-show="rooms.length === 0" x-cloak class="glass p-6 text-center">
+          <p class="serif text-[26px] leading-tight">A blank site</p>
+          <p class="t2 text-[14px] mt-1">Add a room above and it gets its own QR tag.</p>
+        </div>
+      </section>
+    </main>
+
+    <!-- ================= ROOM ================= -->
+    <main x-show="currentView === 'roomDetail' && activeRoom" x-cloak
+          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
+          class="flex-1 pt-8 space-y-7">
+
+      <div class="flex items-center justify-between">
+        <button x-show="!lockedToRoom" @click="goDashboard()" class="round-btn" aria-label="Back to house">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <span x-show="lockedToRoom" class="t3 text-[12px]">Room brief</span>
+        <span class="chip font-mono" x-text="activeRoom?.qrCodeId"></span>
+      </div>
+
+      <section>
+        <h1 class="serif hero" x-text="activeRoom?.name"></h1>
+        <p class="t2 text-[16px] mt-4" x-text="activeRoom && activeRoom.tasks.length ? roomDoneCount(activeRoom) + ' of ' + activeRoom.tasks.length + ' done' : 'Nothing logged yet.'"></p>
+
+        <div class="mt-5">
+          <div class="flex flex-wrap gap-2">
+            <template x-for="t in roomTradies(activeRoom)" :key="t.id">
+              <span class="chip inline-flex items-center gap-2">
+                <span class="font-semibold" x-text="t.trade + ':'"></span>
+                <span x-text="t.name"></span>
+                <button x-show="viewMode === 'owner'" @click="textTradie(t, activeRoom)" class="font-bold underline underline-offset-4">Text</button>
+              </span>
+            </template>
+          </div>
+          <p x-show="roomTradies(activeRoom).length === 0" class="t3 text-[13px]">No one assigned yet. Add a task and pick a tradie.</p>
+        </div>
+      </section>
+
+      <div class="flex gap-3">
+        <button @click="openAddTaskModal()" class="btn-white flex-1 flex items-center justify-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add a task
+        </button>
+        <button x-show="viewMode === 'owner'" @click="closeAllModals(); showQrPreviewModal = true" class="btn-glass">QR tag</button>
+      </div>
+
+      <section class="space-y-3">
+        <h2 class="serif text-[30px] leading-none px-1">Activity</h2>
+
+        <div class="relative pl-5 space-y-3" style="border-left:1px solid rgba(255,255,255,.22); margin-left:6px;">
+          <template x-for="task in (activeRoom?.tasks || [])" :key="task.id">
+            <div class="relative">
+              <span class="absolute -left-[26px] top-6 w-2.5 h-2.5 rounded-full" :style="'background:' + (task.done ? '#fff' : 'rgba(255,255,255,.45)')"></span>
+              <div class="glass p-4" :class="task.done ? 'opacity-70' : ''">
+                <div class="flex gap-3">
+                  <button class="check mt-0.5" :class="task.done ? 'on' : ''" @click="toggleTaskDone(task)" :aria-label="task.done ? 'Mark as not done' : 'Mark as done'">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>
+                  </button>
+                  <div class="flex-1 min-w-0">
+                    <h4 class="font-semibold text-[15px] leading-snug" :class="task.done ? 'line-through' : ''" x-text="task.title"></h4>
+                    <p x-show="task.desc" class="t2 text-[13px] leading-relaxed mt-1" x-text="task.desc"></p>
+                    <button x-show="task.fileName" @click="openAttachment(task)" class="chip inline-flex items-center gap-2 mt-2 max-w-full">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11l-9 9a5 5 0 01-7-7l9-9a3.5 3.5 0 015 5l-9 9a2 2 0 01-3-3l8-8"/></svg>
+                      <span class="font-mono truncate" x-text="task.fileName"></span>
+                      <span class="t3 flex-none">Open &nearr;</span>
+                    </button>
+                    <div class="flex items-center justify-between gap-3 mt-3 pt-3 text-[12px]" style="border-top:1px solid var(--line);">
+                      <span class="t2 min-w-0" x-text="taskTradieLabel(task)"></span>
+                      <span class="t3 flex-none text-right" x-text="task.scheduledAt ? fmtWhen(task.scheduledAt) : task.timestamp"></span>
+                    </div>
+                    <div x-show="viewMode === 'owner'" class="flex gap-4 mt-2 text-[12px] font-semibold t2">
+                      <button @click="editTask(task)" class="underline underline-offset-4">Edit</button>
+                      <button @click="deleteTask(task.id)" class="underline underline-offset-4">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <p x-show="!activeRoom?.tasks || activeRoom?.tasks.length === 0" class="t3 text-[14px] px-1">Nothing logged for this room yet.</p>
+      </section>
+
+      <div x-show="viewMode === 'owner' && !lockedToRoom" class="pt-4">
+        <button @click="confirmDeleteRoom(activeRoom)" class="btn-danger w-full">Delete this room</button>
+      </div>
+    </main>
+
+    <!-- ================= TEAM ================= -->
+    <main x-show="currentView === 'team'" x-cloak
+          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
+          class="flex-1 pt-12 space-y-8">
+
+      <section>
+        <h1 class="serif hero">Your team.</h1>
+        <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="tradies.length === 0 ? 'No one yet. Add your first tradie.' : 'Add someone once, then pick them whenever you log a task.'"></p>
+      </section>
+
+      <button @click="openAddTradeModal()" class="btn-white w-full flex items-center justify-center gap-2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add a tradie
+      </button>
+
+      <section class="space-y-3">
+        <template x-for="t in tradies" :key="t.id">
+          <div class="glass p-5 flex items-center justify-between gap-4">
+            <div class="min-w-0">
+              <h3 class="serif text-[30px] leading-none truncate" x-text="t.name"></h3>
+              <p class="t2 text-[13px] mt-2.5" x-text="t.trade + (t.phone ? ' · ' + t.phone : '')"></p>
+              <p x-show="t.email" class="t2 text-[13px] truncate" x-text="t.email"></p>
+              <p class="t3 text-[12px] mt-1" x-text="openTasksFor(t.id) === 0 ? 'No open tasks' : openTasksFor(t.id) + ' open task' + (openTasksFor(t.id) === 1 ? '' : 's')"></p>
+            </div>
+            <div class="flex flex-col items-end gap-2 flex-none">
+              <button @click="openEditTradeModal(t)" class="chip font-semibold">Edit</button>
+              <button @click="removeTradie(t.id)" class="t3 text-[12px] underline underline-offset-4">Remove</button>
+            </div>
+          </div>
+        </template>
+        <p class="t3 text-[13px] px-1 leading-relaxed">When you assign someone to a task, you can text them that room&rsquo;s link in one tap.</p>
+      </section>
+    </main>
+
+    <!-- ================= TAGS ================= -->
+    <main x-show="currentView === 'tags'" x-cloak
+          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
+          class="flex-1 pt-12 space-y-7">
+      <section>
+        <h1 class="serif hero">Tags.</h1>
+        <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="rooms.length === 0 ? 'Add a room first and its sticker will live here.' : 'Tap the stickers you want to print.'"></p>
+      </section>
+
+      <div x-show="rooms.length > 0" class="flex items-center justify-between gap-3">
+        <span class="t2 text-[13px] font-semibold" x-text="selectedRooms.length + ' of ' + rooms.length + ' selected'"></span>
+        <button class="chip" @click="selectedTagIds = (selectedRooms.length === rooms.length ? [] : rooms.map(r => r.id))" x-text="selectedRooms.length === rooms.length ? 'Clear' : 'Select all'"></button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+        <template x-for="r in rooms" :key="r.id">
+          <div role="button" tabindex="0" class="tag" :class="selectedTagIds.includes(r.id) ? 'sel' : ''" @click="toggleTag(r.id)" @keydown.enter="toggleTag(r.id)" :aria-pressed="selectedTagIds.includes(r.id)">
+            <span class="tick"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></span>
+            <h3 class="serif text-[22px] leading-tight mt-1 px-5" x-text="r.name"></h3>
+            <div class="qr inline-block bg-white rounded-2xl p-2 mt-2" style="width:104px;" x-html="qrMarkup(r)"></div>
+            <p class="font-mono text-[11px] t2 mt-2" x-text="r.qrCodeId"></p>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="rooms.length > 0">
+        <label class="lbl">Sticker size</label>
+        <div class="flex gap-2">
+          <button class="chip" :class="stickerSize === 150 ? 'on' : ''" @click="stickerSize = 150">Large &middot; 15 cm</button>
+          <button class="chip" :class="stickerSize === 85 ? 'on' : ''" @click="stickerSize = 85">Small &middot; 8.5 cm</button>
+        </div>
+        <p class="t3 text-[12px] mt-2" x-show="selectedRooms.length" x-text="'Prints on ' + pagesNeeded + (pagesNeeded === 1 ? ' A4 page' : ' A4 pages') + ', spaced so nothing is cut off.'"></p>
+      </div>
+
+      <button x-show="rooms.length > 0" @click="printSelected()" class="btn-white w-full" :class="selectedRooms.length ? '' : 'opacity-50'"
+              x-text="selectedRooms.length ? 'Print ' + selectedRooms.length + (selectedRooms.length === 1 ? ' sticker' : ' stickers') : 'Select stickers to print'"></button>
+    </main>
+
+    <!-- ================= MODAL: ADD ROOM ================= -->
+    <div x-show="showAddRoomModal" x-cloak class="scrim">
+      <div @click.outside="showAddRoomModal = false" class="sheet space-y-5">
+        <div class="flex justify-between items-center">
+          <h3 class="serif text-[30px] leading-none">New room</h3>
+          <button @click="showAddRoomModal = false" class="round-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="lbl">Room name</label>
+            <input type="text" x-model="newRoom.name" placeholder="e.g. Master Ensuite" class="input">
+            <div class="flex flex-wrap gap-2 mt-3">
+              <template x-for="preset in roomPresets" :key="preset">
+                <button @click="newRoom.name = preset" class="chip" x-text="preset"></button>
+              </template>
+            </div>
+          </div>
+          <div>
+            <label class="lbl">Sticker / tag ID (optional)</label>
+            <input type="text" x-model="newRoom.customQrId" placeholder="Leave blank to auto-generate" class="input font-mono">
+          </div>
+          <button @click="saveRoom()" class="btn-white w-full">Create room</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: DELETE ROOM ================= -->
+    <div x-show="showDeleteRoomModal" x-cloak class="scrim" style="align-items:center;">
+      <div @click.outside="showDeleteRoomModal = false" class="sheet text-center space-y-5">
+        <div>
+          <h3 class="serif text-[30px] leading-none">Delete room?</h3>
+          <p class="t2 text-[14px] mt-3 leading-relaxed">This removes <strong class="text-white" x-text="roomToDelete?.name"></strong> and everything logged in it. Its QR sticker will stop working.</p>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <button @click="showDeleteRoomModal = false; roomToDelete = null;" class="btn-glass !px-4">Cancel</button>
+          <button @click="executeRoomDelete()" class="font-semibold text-[15px] rounded-full text-white" style="background:#E5484D; padding:15px 16px;">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: ADD TRADIE ================= -->
+    <div x-show="showAddTradeModal" x-cloak class="scrim">
+      <div @click.outside="showAddTradeModal = false" class="sheet space-y-5">
+        <div class="flex justify-between items-center">
+          <h3 class="serif text-[30px] leading-none" x-text="editingTradieId ? 'Edit tradie' : 'New tradie'"></h3>
+          <button @click="showAddTradeModal = false" class="round-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="lbl">Name</label>
+            <input type="text" x-model="newTrade.name" placeholder="e.g. Dave" class="input">
+          </div>
+          <div>
+            <label class="lbl">Trade</label>
+            <select x-model="newTrade.trade" class="input">
+              <option value="">Select trade&hellip;</option>
+              <template x-for="t in tradeOptions" :key="t"><option :value="t" x-text="t"></option></template>
+            </select>
+          </div>
+          <div>
+            <label class="lbl">Mobile (for job links by text)</label>
+            <input type="tel" x-model="newTrade.phone" placeholder="e.g. 0412345678" class="input">
+          </div>
+          <div>
+            <label class="lbl">Email (optional)</label>
+            <input type="email" x-model="newTrade.email" placeholder="e.g. dave@plumbing.com.au" class="input">
+          </div>
+          <button @click="saveTradie()" class="btn-white w-full" x-text="editingTradieId ? 'Save changes' : 'Add to team'"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: ADD / EDIT TASK ================= -->
+    <div x-show="showAddTaskModal" x-cloak class="scrim">
+      <div @click.outside="showAddTaskModal = false" class="sheet space-y-5">
+        <div class="flex justify-between items-center gap-3">
+          <h3 class="serif text-[30px] leading-none" x-text="editingTaskId ? 'Edit task' : 'New task'"></h3>
+          <button @click="showAddTaskModal = false" class="round-btn flex-none" aria-label="Close">&times;</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="lbl">What needs doing?</label>
+            <input type="text" x-model="newTask.title" placeholder="e.g. Rough in dual shower mixer" class="input">
+          </div>
+          <div>
+            <label class="lbl">Notes</label>
+            <textarea x-model="newTask.desc" rows="2" placeholder="Details for yourself or the tradie&hellip;" class="input resize-none"></textarea>
+          </div>
+          <div>
+            <label class="lbl">Assign to</label>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="t in tradies" :key="t.id">
+                <button type="button" @click="toggleTaskTradie(t.id)" class="chip" :class="newTask.tradeIds.includes(t.id) ? 'on' : ''" x-text="t.name + ' · ' + t.trade.replace(/ \(.*\)/, '')"></button>
+              </template>
+            </div>
+            <p class="t3 text-[12px] mt-2" x-show="tradies.length === 0">No one on your team yet. Add tradies from the Team tab first.</p>
+            <p class="t3 text-[12px] mt-2" x-show="tradies.length > 0 && newTask.tradeIds.length === 0">Tap one or more tradies. Leave empty for DIY / owner.</p>
+            <p class="t2 text-[12px] mt-2" x-show="newTask.tradeIds.length > 0">You&rsquo;ll be offered a one-tap text when you save.</p>
+          </div>
+          <div>
+            <label class="lbl">When (optional)</label>
+            <input type="datetime-local" x-model="newTask.scheduledAt" class="input">
+          </div>
+          <div>
+            <label class="lbl">Attach plan / spec sheet</label>
+            <input type="file" @change="handleFileUpload" class="input !p-2.5 text-[13px]">
+          </div>
+          <button @click="saveTask()" class="btn-white w-full">Save task</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: SINGLE ROOM QR ================= -->
+    <div x-show="showQrPreviewModal" x-cloak class="scrim" style="align-items:center;">
+      <div @click.outside="showQrPreviewModal = false" class="sheet text-center space-y-5" style="max-width:320px;">
+        <div>
+          <span class="t3 text-[12px] font-semibold uppercase tracking-widest">Room tag</span>
+          <h3 class="serif text-[32px] leading-none mt-2" x-text="activeRoom?.name"></h3>
+        </div>
+        <div class="qr inline-block p-3 rounded-3xl bg-white mx-auto" style="width:200px;" x-html="activeRoom ? qrMarkup(activeRoom) : ''"></div>
+        <div>
+          <p class="font-mono font-semibold text-[14px]" x-text="activeRoom?.qrCodeId"></p>
+          <p class="t2 text-[13px] mt-2 leading-relaxed">Stick it on the doorframe. Scanning opens this room&rsquo;s brief &mdash; no app download needed.</p>
+        </div>
+        <div class="flex gap-3">
+          <button @click="selectedTagIds = [activeRoom.id]; go('tags')" class="btn-white flex-1">Print tag</button>
+          <button @click="showQrPreviewModal = false" class="btn-glass">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= MODAL: NOTIFY TRADIES ================= -->
+    <div x-show="showNotifyModal" x-cloak class="scrim" style="align-items:center;">
+      <div @click.outside="showNotifyModal = false" class="sheet space-y-5">
+        <div class="flex justify-between items-center">
+          <h3 class="serif text-[30px] leading-none">Notify</h3>
+          <button @click="showNotifyModal = false" class="round-btn" aria-label="Close">&times;</button>
+        </div>
+        <div class="space-y-3">
+          <template x-for="t in notifyList" :key="t.id">
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0"><p class="font-semibold text-[15px]" x-text="t.name"></p><p class="t2 text-[12px]" x-text="t.trade"></p></div>
+              <button @click="textTradie(t, notifyRoom, notifyTask)" class="btn-white !py-2.5 !px-5 !text-[14px]">Text</button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= BOTTOM NAV ================= -->
+    <nav x-show="!lockedToRoom" x-cloak class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4" style="padding-bottom:calc(1rem + env(safe-area-inset-bottom));">
+      <div class="glass flex w-full max-w-sm p-1.5 gap-1" style="border-radius:9999px;">
+        <button class="nav-item" :class="currentView === 'dashboard' ? 'on' : ''" @click="goDashboard()">House</button>
+        <button class="nav-item" :class="currentView === 'roomDetail' ? 'on' : ''" @click="openLastRoom()">Room</button>
+        <button class="nav-item" :class="currentView === 'team' ? 'on' : ''" @click="goTeam()">Team</button>
+        <button class="nav-item" :class="currentView === 'tags' ? 'on' : ''" @click="goTags()">Tags</button>
+      </div>
+    </nav>
+
+  </div>
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</body>
+</html>

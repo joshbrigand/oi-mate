@@ -7,6 +7,7 @@
   <meta name="description" content="Scan a room's QR tag to see the brief, or run the whole site from the owner dashboard.">
   <meta name="theme-color" content="#14070E">
 
+  <script>try{var d=JSON.parse(localStorage.getItem('oimate_data_v2')||'{}');document.documentElement.dataset.theme=(d.profile&&d.profile.theme)==='light'?'light':'dark'}catch(e){}</script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -30,15 +31,16 @@
     @property --c4   { syntax:'<color>'; inherits:true; initial-value:#FFA08C; }
     @property --dark { syntax:'<color>'; inherits:true; initial-value:#14070E; }
 
-    :root{
-      --t2:rgba(255,255,255,.78);
-      --t3:rgba(255,255,255,.52);
-      --line:rgba(255,255,255,.14);
-    }
-    html,body{ background:#14070E; }
+    :root{ --fg:#fff; --fg-rgb:255,255,255; --inv:#1B1020; --glass-rgb:18,10,22; --sheet-rgb:24,14,30; --scrim-rgb:10,4,14; --page-bg:#14070E; --veil-a:rgba(0,0,0,.06); --veil-b:rgba(0,0,0,.40); --grain-op:.30;
+      --t2:rgba(var(--fg-rgb),.78); --t3:rgba(var(--fg-rgb),.52); --line:rgba(var(--fg-rgb),.14); }
+    html[data-theme="light"]{ --fg:#2A1B30; --fg-rgb:42,27,48; --inv:#fff; --glass-rgb:255,255,255; --sheet-rgb:255,252,250; --scrim-rgb:70,50,70; --page-bg:#F7EFE9; --veil-a:rgba(255,255,255,.12); --veil-b:rgba(255,255,255,.30); --grain-op:.22;
+      --t2:rgba(var(--fg-rgb),.74); --t3:rgba(var(--fg-rgb),.52); --line:rgba(var(--fg-rgb),.13); }
+    html[data-theme="light"] .glass{ background:rgba(255,255,255,.52); }
+    html[data-theme="light"] .input{ background:rgba(255,255,255,.72); color-scheme:light; }
+    html,body{ background:var(--page-bg); }
     body{
       font-family:'Inter',system-ui,-apple-system,sans-serif;
-      color:#fff;
+      color:var(--fg);
       -webkit-font-smoothing:antialiased;
     }
     .serif{ font-family:'Instrument Serif', Georgia, 'Times New Roman', serif; font-weight:400; letter-spacing:-0.02em; }
@@ -47,14 +49,11 @@
     [x-cloak]{ display:none !important; }
 
     /* ---------- the breathing gradient field ---------- */
-    .field{
-      position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
-      background:var(--base);
-      transition: --base 1.8s ease, --c1 1.8s ease, --c2 1.8s ease, --c3 1.8s ease, --c4 1.8s ease, --dark 1.8s ease;
-    }
-    .field[data-mood="ember"]{ --base:#3A0D1E; --c1:#D13FA6; --c2:#FF4F9E; --c3:#FF7A66; --c4:#FFA08C; --dark:#14070E; }
-    .field[data-mood="dusk"] { --base:#1A1646; --c1:#C79BFF; --c2:#5B3BD6; --c3:#6FE3B4; --c4:#FF4F9A; --dark:#0C0922; }
-    .field[data-mood="amber"]{ --base:#3B2616; --c1:#C9A85A; --c2:#E9954A; --c3:#A9B85A; --c4:#F0B27A; --dark:#160D06; }
+    .themeroot{ transition: --base 1.8s ease, --c1 1.8s ease, --c2 1.8s ease, --c3 1.8s ease, --c4 1.8s ease, --dark 1.8s ease; }
+    .field{ position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; background:var(--base); }
+    .nudge{ position:absolute; inset:0; transform:translate3d(calc(var(--nx,0) * 22px), calc(var(--ny,0) * 22px), 0); transition:transform 1.4s cubic-bezier(.2,.7,.2,1); }
+    .tapglow{ position:absolute; left:var(--gx,50%); top:var(--gy,50%); width:70vmax; height:70vmax; margin:-35vmax 0 0 -35vmax; border-radius:9999px; background:radial-gradient(closest-side, rgba(var(--fg-rgb),.16), transparent); opacity:0; transition:opacity 1.4s ease; }
+    .tapglow.on{ opacity:1; transition:opacity .12s ease; }
 
     /* one shared inhale/exhale for the whole composition */
     .breath{ position:absolute; inset:-12%; transform-origin:50% 55%; animation:inhale 10s ease-in-out infinite; will-change:transform; }
@@ -71,79 +70,79 @@
     @keyframes driftC{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(8%,-10%,0) scale(1.16);} }
     @keyframes driftD{ 0%,100%{ transform:translate3d(0,0,0) scale(1);} 50%{ transform:translate3d(-8%,-7%,0) scale(1.12);} }
 
-    .veil{ position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,.06) 0%, rgba(0,0,0,0) 35%, rgba(0,0,0,.40) 100%); }
+    .veil{ position:absolute; inset:0; background:linear-gradient(180deg, var(--veil-a) 0%, transparent 35%, var(--veil-b) 100%); }
     .grain{
-      position:fixed; inset:0; z-index:1; pointer-events:none; opacity:.16; mix-blend-mode:overlay;
-      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
+      position:fixed; inset:0; z-index:1; pointer-events:none; opacity:var(--grain-op); mix-blend-mode:overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.6'/%3E%3C/svg%3E");
     }
 
     /* ---------- glass + controls ---------- */
     .glass{
-      background:rgba(18,10,22,.42);
+      background:rgba(var(--glass-rgb),.42);
       -webkit-backdrop-filter:blur(22px) saturate(1.15); backdrop-filter:blur(22px) saturate(1.15);
       border:1px solid var(--line); border-radius:28px;
     }
     .btn-white{
-      background:#fff; color:#1B1020; border-radius:9999px; font-weight:600; font-size:15px;
+      background:var(--fg); color:var(--inv); border-radius:9999px; font-weight:600; font-size:15px;
       padding:15px 22px; box-shadow:0 14px 34px -14px rgba(0,0,0,.55); transition:transform .15s ease, opacity .15s ease;
     }
     .btn-white:active{ transform:scale(.98); }
     .btn-glass{
-      background:rgba(20,10,24,.30); border:1px solid rgba(255,255,255,.28); color:#fff; border-radius:9999px;
+      background:rgba(var(--glass-rgb),.30); border:1px solid rgba(var(--fg-rgb),.28); color:var(--fg); border-radius:9999px;
       font-weight:600; font-size:15px; padding:15px 22px;
       -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px); transition:background .15s ease;
     }
-    .btn-glass:active{ background:rgba(20,10,24,.45); }
+    .btn-glass:active{ background:rgba(var(--glass-rgb),.45); }
     .pill-sm{
-      background:rgba(255,255,255,.14); border:1px solid var(--line); border-radius:9999px;
+      background:rgba(var(--fg-rgb),.14); border:1px solid var(--line); border-radius:9999px;
       font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:8px 14px;
       -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
     }
     .chip{
-      background:rgba(255,255,255,.10); border:1px solid var(--line); border-radius:9999px;
-      font-size:12px; padding:6px 12px; color:#fff;
+      background:rgba(var(--fg-rgb),.10); border:1px solid var(--line); border-radius:9999px;
+      font-size:12px; padding:6px 12px; color:var(--fg);
     }
     .round-btn{
       width:40px; height:40px; border-radius:9999px; display:flex; align-items:center; justify-content:center;
-      background:rgba(255,255,255,.14); border:1px solid var(--line);
+      background:rgba(var(--fg-rgb),.14); border:1px solid var(--line);
       -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
     }
     .lbl{ font-size:12px; font-weight:600; color:var(--t2); display:block; margin-bottom:6px; }
     .input{
-      width:100%; padding:13px 14px; font-size:14px; color:#fff; color-scheme:dark;
-      background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18); border-radius:16px;
+      width:100%; padding:13px 14px; font-size:14px; color:var(--fg); color-scheme:dark;
+      background:rgba(var(--fg-rgb),.08); border:1px solid rgba(var(--fg-rgb),.18); border-radius:16px;
     }
-    .input::placeholder{ color:rgba(255,255,255,.40); }
-    .input:focus{ outline:none; border-color:rgba(255,255,255,.55); box-shadow:0 0 0 3px rgba(255,255,255,.12); }
-    .input::file-selector-button{ background:rgba(255,255,255,.16); color:#fff; border:0; border-radius:9999px; padding:6px 12px; margin-right:10px; font-weight:600; }
+    .input::placeholder{ color:rgba(var(--fg-rgb),.40); }
+    .input:focus{ outline:none; border-color:rgba(var(--fg-rgb),.55); box-shadow:0 0 0 3px rgba(var(--fg-rgb),.12); }
+    .input::file-selector-button{ background:rgba(var(--fg-rgb),.16); color:var(--fg); border:0; border-radius:9999px; padding:6px 12px; margin-right:10px; font-weight:600; }
 
-    .scrim{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; padding:16px; background:rgba(10,4,14,.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+    .scrim{ position:fixed; inset:0; z-index:40; display:flex; align-items:flex-end; justify-content:center; padding:16px; background:rgba(var(--scrim-rgb),.55); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
     @media (min-width:640px){ .scrim{ align-items:center; } }
     .sheet{
-      width:100%; max-width:384px; padding:22px; border-radius:32px; color:#fff;
-      background:rgba(24,14,30,.86); border:1px solid var(--line);
+      width:100%; max-width:384px; padding:22px; border-radius:32px; color:var(--fg);
+      background:rgba(var(--sheet-rgb),.86); border:1px solid var(--line);
       -webkit-backdrop-filter:blur(30px); backdrop-filter:blur(30px);
       max-height:90vh; overflow-y:auto;
     }
 
     .check{
       flex:none; width:26px; height:26px; border-radius:9999px; display:flex; align-items:center; justify-content:center;
-      border:1.5px solid rgba(255,255,255,.6); color:transparent; transition:all .2s ease;
+      border:1.5px solid rgba(var(--fg-rgb),.6); color:transparent; transition:all .2s ease;
     }
-    .check.on{ background:#fff; border-color:#fff; color:#1B1020; }
+    .check.on{ background:var(--fg); border-color:var(--fg); color:var(--inv); }
 
     .nav-item{ flex:1; padding:11px 0; border-radius:9999px; font-size:13px; font-weight:600; color:var(--t2); transition:background .2s ease, color .2s ease; }
-    .nav-item.on{ background:rgba(255,255,255,.20); color:#fff; }
+    .nav-item.on{ background:rgba(var(--fg-rgb),.20); color:var(--fg); }
 
     /* logo chip — rings out on the same 10s breath as the background */
-    .logo{ position:relative; width:40px; height:40px; border-radius:9999px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.18); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
-    .logo::before{ content:''; position:absolute; inset:-5px; border-radius:9999px; border:1.5px solid rgba(255,255,255,.55); animation:ringBreath 10s ease-in-out infinite; }
-    .logo i{ position:relative; display:block; width:16px; height:16px; border-radius:9999px; border:2px solid #fff; }
-    .logo i::after{ content:''; position:absolute; inset:3px; border-radius:9999px; background:#fff; }
+    .logo{ position:relative; width:40px; height:40px; border-radius:9999px; display:flex; align-items:center; justify-content:center; background:rgba(var(--fg-rgb),.18); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); }
+    .logo::before{ content:''; position:absolute; inset:-5px; border-radius:9999px; border:1.5px solid rgba(var(--fg-rgb),.55); animation:ringBreath 10s ease-in-out infinite; }
+    .logo i{ position:relative; display:block; width:16px; height:16px; border-radius:9999px; border:2px solid var(--fg); }
+    .logo i::after{ content:''; position:absolute; inset:3px; border-radius:9999px; background:var(--fg); }
     @keyframes ringBreath{ 0%,100%{ transform:scale(.9); opacity:.6; } 50%{ transform:scale(1.2); opacity:0; } }
 
     @media (prefers-reduced-motion: reduce){
-      .breath, .orb, .logo::before{ animation:none !important; }
+      .breath, .orb, .logo::before, .mesh i, .orb-wrap::before, .orb-big::before{ animation:none !important; }
       .field{ transition:none; }
       .page{ transition:none; }
     }
@@ -151,12 +150,48 @@
     .page{ transition:opacity .55s ease; }
     .page.is-out{ opacity:0; transition-duration:.26s; }
     .btn-danger{ background:rgba(229,72,77,.16); border:1px solid rgba(255,140,140,.45); color:#FFC2BF; border-radius:9999px; font-weight:600; font-size:15px; padding:15px 22px; }
-    .chip.on{ background:#fff; color:#1B1020; border-color:#fff; font-weight:600; }
-    .tag{ position:relative; border-radius:28px; padding:12px; text-align:center; background:rgba(255,255,255,.08); border:2px solid transparent; outline:1px solid var(--line); transition:border-color .15s ease, background .15s ease; cursor:pointer; }
-    .tag.sel{ border-color:#fff; background:rgba(255,255,255,.16); }
-    .tag .tick{ position:absolute; top:10px; right:10px; width:24px; height:24px; border-radius:9999px; border:1.5px solid rgba(255,255,255,.6); display:flex; align-items:center; justify-content:center; color:transparent; }
-    .tag.sel .tick{ background:#fff; border-color:#fff; color:#1B1020; }
+    .chip.on{ background:var(--fg); color:var(--inv); border-color:var(--fg); font-weight:600; }
+    .tag{ position:relative; border-radius:28px; padding:12px; text-align:center; background:rgba(var(--fg-rgb),.08); border:2px solid transparent; outline:1px solid var(--line); transition:border-color .15s ease, background .15s ease; cursor:pointer; }
+    .tag.sel{ border-color:var(--fg); background:rgba(var(--fg-rgb),.16); }
+    .tag .tick{ position:absolute; top:10px; right:10px; width:24px; height:24px; border-radius:9999px; border:1.5px solid rgba(var(--fg-rgb),.6); display:flex; align-items:center; justify-content:center; color:transparent; }
+    .tag.sel .tick{ background:var(--fg); border-color:var(--fg); color:var(--inv); }
     .qr svg, .qr img{ display:block; width:100%; height:auto; }
+
+    .orb-wrap{ position:relative; display:block; width:44px; height:44px; border-radius:9999px; }
+    .orb-wrap::before{ content:''; position:absolute; inset:-5px; border-radius:9999px; border:1.5px solid rgba(var(--fg-rgb),.5); animation:ringBreath 10s ease-in-out infinite; pointer-events:none; }
+    .orb-btn{ position:absolute; inset:0; border-radius:9999px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:rgba(var(--fg-rgb),.10); border:1px solid var(--line); isolation:isolate; }
+    .orb-btn.in{ background:var(--base); }
+    .mesh{ position:absolute; inset:0; }
+    .mesh i{ position:absolute; border-radius:9999px; width:75%; height:75%; filter:blur(var(--mb,7px)); will-change:transform; }
+    .mesh .m1{ background:var(--c1); top:-15%; left:-15%; animation:meshA 7s ease-in-out infinite; }
+    .mesh .m2{ background:var(--c2); top:5%; right:-25%; animation:meshB 9s ease-in-out infinite; }
+    .mesh .m3{ background:var(--c3); bottom:-25%; left:5%; animation:meshC 8s ease-in-out infinite; }
+    .mesh .m4{ background:var(--c4); bottom:-10%; right:-15%; width:55%; height:55%; animation:meshA 11s ease-in-out infinite reverse; }
+    @keyframes meshA{ 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(40%,35%) scale(1.2);} }
+    @keyframes meshB{ 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(-45%,25%) scale(1.15);} }
+    @keyframes meshC{ 0%,100%{ transform:translate(0,0) scale(1);} 50%{ transform:translate(30%,-40%) scale(1.25);} }
+    .dotmark{ position:relative; width:14px; height:14px; border-radius:9999px; border:2px solid var(--fg); }
+    .dotmark::after{ content:''; position:absolute; inset:2px; border-radius:9999px; background:var(--fg); }
+    .orb-big{ width:176px; height:176px; border-radius:9999px; position:relative; }
+    .orb-big .orb-btn{ --mb:22px; }
+    .orb-big::before{ content:''; position:absolute; inset:-12px; border-radius:9999px; border:1.5px solid rgba(var(--fg-rgb),.45); animation:ringBreath 10s ease-in-out infinite; pointer-events:none; }
+    .sw{ position:relative; flex:none; width:48px; height:28px; border-radius:9999px; background:rgba(var(--fg-rgb),.22); transition:background .25s ease; }
+    .sw i{ position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:9999px; background:var(--fg); transition:transform .25s ease, background .25s ease; }
+    .sw.on{ background:var(--fg); } .sw.on i{ background:var(--inv); transform:translateX(20px); }
+    .seg{ display:flex; gap:6px; padding:4px; border-radius:9999px; background:rgba(var(--fg-rgb),.10); border:1px solid var(--line); }
+    .seg button{ flex:1; padding:10px 0; border-radius:9999px; font-size:14px; font-weight:600; color:var(--t2); transition:all .2s ease; }
+    .seg button.on{ background:var(--fg); color:var(--inv); }
+    .prog{ height:8px; border-radius:9999px; background:rgba(var(--fg-rgb),.16); overflow:hidden; }
+    .prog-fill{ height:100%; border-radius:9999px; background:linear-gradient(90deg, rgba(var(--fg-rgb),.5), var(--fg)); transition:width .9s cubic-bezier(.2,.7,.2,1); }
+    .grip{ flex:none; width:28px; display:flex; align-items:center; justify-content:center; color:var(--t3); touch-action:none; cursor:grab; }
+    .roomcard{ transition:transform .2s ease, box-shadow .2s ease, opacity .2s ease; }
+    .roomcard.dragging{ transform:scale(1.025); box-shadow:0 24px 50px -18px rgba(0,0,0,.55); z-index:5; position:relative; }
+    .onb-progress{ height:2px; border-radius:9999px; background:rgba(var(--fg-rgb),.14); overflow:hidden; margin-top:14px; }
+    .onb-progress i{ display:block; height:100%; background:rgba(var(--fg-rgb),.55); transition:width .8s ease; }
+    .big-input{ width:100%; background:transparent; border:0; border-bottom:1px solid rgba(var(--fg-rgb),.35); padding:12px 2px; font-size:26px; color:var(--fg); font-family:'Instrument Serif',Georgia,serif; letter-spacing:-0.01em; border-radius:0; }
+    .big-input::placeholder{ color:rgba(var(--fg-rgb),.3); }
+    .big-input:focus{ outline:none; border-bottom-color:var(--fg); }
+    select.big-input{ color-scheme:dark; } html[data-theme="light"] select.big-input{ color-scheme:light; }
 
     /* ---------- printing: stickers only, no headers/footers, never cut off ---------- */
     #printArea{ display:none; }
@@ -182,6 +217,25 @@
     function idb(){ return new Promise((res, rej) => { const r = indexedDB.open('oimate-files', 1); r.onupgradeneeded = () => r.result.createObjectStore('files'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
     async function idbPut(k, v){ const db = await idb(); return new Promise((res, rej) => { const t = db.transaction('files', 'readwrite'); t.objectStore('files').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
     async function idbGet(k){ const db = await idb(); return new Promise((res, rej) => { const q = db.transaction('files').objectStore('files').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
+
+    /* ---- colour palettes: time of day x theme ---- */
+    const PALETTES = {
+      dark: {
+        morning: { base: '#0E2A4A', dark: '#081A33', c: ['#7FC8FF', '#FFD66B', '#8FE3D2', '#FFB59A'] },
+        midday:  { base: '#123B63', dark: '#0B2745', c: ['#5FB6FF', '#FFE08A', '#7FDDB8', '#A8D8FF'] },
+        evening: { base: '#3A1A3E', dark: '#1A0B22', c: ['#FF8F70', '#FFC36B', '#C86BD1', '#FF6F91'] },
+        night:   { base: '#26110C', dark: '#120805', c: ['#C2552B', '#E8A33D', '#8E2F2A', '#D9772F'] }
+      },
+      light: {
+        morning: { base: '#EAF4FF', dark: '#D2E5F7', c: ['#A9D8FF', '#FFE9A8', '#CDEFE6', '#FFD7C4'] },
+        midday:  { base: '#E6F3FF', dark: '#CFE3F5', c: ['#9ACBFF', '#FFF0B8', '#C8F0DC', '#CFE6FF'] },
+        evening: { base: '#FBEAE6', dark: '#F0D4DC', c: ['#FFC0A8', '#FFE0A8', '#E5BDF0', '#FFB5C8'] },
+        night:   { base: '#F6E7DA', dark: '#E9CDB8', c: ['#F2B58A', '#F5D08A', '#E8A39A', '#F0B27A'] }
+      }
+    };
+    const AU_TZ = { SA: 'Australia/Adelaide', NSW: 'Australia/Sydney', ACT: 'Australia/Sydney', VIC: 'Australia/Melbourne', QLD: 'Australia/Brisbane', WA: 'Australia/Perth', TAS: 'Australia/Hobart', NT: 'Australia/Darwin' };
+    const COUNTRY_TZ = { 'New Zealand': 'Pacific/Auckland', 'United Kingdom': 'Europe/London', 'Ireland': 'Europe/Dublin' };
+    const KEYWORDS = { 'Plumber': ['plumb'], 'Sparky (Electrician)': ['spark', 'electric'], 'Tiler': ['tiler', 'tiling'], 'Carpenter': ['carpent', 'chippy'], 'Painter': ['painter', 'painting'], 'Concreter': ['concret'], 'Waterproofer': ['waterproof'], 'Flooring': ['floor'], 'Cabinet Maker': ['cabinet'] };
 
     /* ---- cloud backend (public keys, safe in the browser; data is protected by row-level security) ---- */
     const SB_URL = 'https://zbwwvdthyqxdvwyylkhd.supabase.co';
@@ -209,6 +263,10 @@
         notifyList: [], notifyRoom: null, notifyTask: null,
         selectedTagIds: [], stickerSize: 150,
         fading: true, _navTok: 0,
+        profile: { name: '', phone: '', email: '', country: '', state: '', theme: 'dark', notify: false, onboarded: false, calSeen: [] },
+        draggingId: null, nowTick: Date.now(), onbStep: 0, onbTotal: 7, gtok: null, calBusy: false, showSyncModal: false, syncMode: '', syncItems: [],
+        countries: ['Australia', 'New Zealand', 'United Kingdom', 'Ireland', 'United States', 'Canada', 'Other'],
+        auStates: [['SA', 'South Australia'], ['NSW', 'New South Wales'], ['VIC', 'Victoria'], ['QLD', 'Queensland'], ['WA', 'Western Australia'], ['TAS', 'Tasmania'], ['NT', 'Northern Territory'], ['ACT', 'Australian Capital Territory']],
         user: null, authReady: false, cloudReady: false, syncState: 'idle', scanStatus: 'idle', _cacheOwner: null,
         editingTradieId: null,
 
@@ -257,6 +315,7 @@
                 this._cacheOwner = parsed.owner || null;
                 if (parsed.rooms?.length) this.rooms = parsed.rooms;
                 if (parsed.tradies) this.tradies = parsed.tradies;
+                if (parsed.profile) this.profile = { ...this.profile, ...parsed.profile };
               }
             } catch (e) { console.warn('Could not restore saved data:', e); }
           }
@@ -264,6 +323,10 @@
 
           this.$watch('rooms', () => this.persist());
           this.$watch('tradies', () => this.persist());
+          this.$watch('profile', () => this.persist());
+          this.applyTheme(); this.initEffects();
+          setInterval(() => { this.nowTick = Date.now(); }, 60000);
+          if (localStorage.getItem('oimate_onb') === '1') { this.onbStep = 2; localStorage.removeItem('oimate_onb'); }
           window.addEventListener('hashchange', () => { if (/^#\/r\//.test(window.location.hash)) window.location.reload(); });
           window.addEventListener('popstate', (e) => this.onPop(e));
           if (!this.lockedToRoom) { try { history.replaceState({ view: 'dashboard', roomId: null }, ''); } catch (e) {} }
@@ -278,13 +341,14 @@
             try { const { data } = await sb.auth.getSession(); await this.handleSession(data.session); } catch (e) { console.warn(e); }
           }
           this.authReady = true;
+          this.applyTheme(); this.notifyToday();
         },
         migrateTasks() {
           this.rooms.forEach(r => (r.tasks || []).forEach(t => { if (!t.tradeIds) { t.tradeIds = t.tradeId ? [t.tradeId] : []; delete t.tradeId; } }));
         },
         persist() {
           if (this.lockedToRoom) return;
-          try { localStorage.setItem('oimate_data_v2', JSON.stringify({ rooms: this.rooms, tradies: this.tradies, owner: this.user?.id || this._cacheOwner || null })); }
+          try { localStorage.setItem('oimate_data_v2', JSON.stringify({ rooms: this.rooms, tradies: this.tradies, profile: this.profile, owner: this.user?.id || this._cacheOwner || null })); }
           catch (e) { console.warn('Could not save data:', e); }
           if (this.user && this.cloudReady) { clearTimeout(this._saveT); this._saveT = setTimeout(() => this.saveCloud(), 900); }
         },
@@ -311,18 +375,23 @@
           if (this.user && this.user.id === session.user.id) return;
           const md = session.user.user_metadata || {};
           this.user = { id: session.user.id, email: session.user.email, name: md.full_name || md.name || session.user.email, picture: md.avatar_url || md.picture || '' };
+          this.captureToken(session);
           this.syncState = 'saving';
           try {
             const { data, error } = await sb.from('projects').select('data').eq('owner', this.user.id).maybeSingle();
             if (error) throw error;
             if (data && data.data && (data.data.rooms || data.data.tradies)) {
               this.rooms = data.data.rooms || []; this.tradies = data.data.tradies || [];
+              if (data.data.profile) this.profile = { ...this.profile, ...data.data.profile };
               this.migrateTasks();
             } else {
               // first sign-in: keep what's on this device unless it belonged to a different account
               if (this._cacheOwner && this._cacheOwner !== this.user.id) { this.rooms = []; this.tradies = []; }
               await this.saveCloud();
             }
+            if (!this.profile.name) this.profile.name = this.user.name || '';
+            if (!this.profile.email) this.profile.email = this.user.email || '';
+            this.applyTheme();
             this._cacheOwner = this.user.id;
             this.cloudReady = true;
             this.syncState = 'saved';
@@ -335,7 +404,7 @@
         async saveCloud() {
           if (!sb || !this.user || this.lockedToRoom) return;
           this.syncState = 'saving';
-          const doc = JSON.parse(JSON.stringify({ rooms: this.rooms, tradies: this.tradies }));
+          const doc = JSON.parse(JSON.stringify({ rooms: this.rooms, tradies: this.tradies, profile: this.profile }));
           const { error } = await sb.from('projects').upsert({ owner: this.user.id, data: doc, updated_at: new Date().toISOString() }, { onConflict: 'owner' });
           this.syncState = error ? 'error' : 'saved';
           if (error) console.warn(error);
@@ -347,6 +416,7 @@
         },
         async signOut() {
           if (sb) await sb.auth.signOut();
+          this.gtok = null; try { localStorage.removeItem('oimate_gtoken'); } catch (e) {}
           this.user = null; this.cloudReady = false; this.syncState = 'idle';
           this.showToast('Signed out.');
         },
@@ -356,23 +426,15 @@
           const st = e.state;
           let view = 'dashboard', id = null;
           if (st && st.view === 'roomDetail' && this.rooms.some(r => r.id === st.roomId)) { view = 'roomDetail'; id = st.roomId; }
-          else if (st && (st.view === 'team' || st.view === 'tags')) view = st.view;
+          else if (st && (st.view === 'team' || st.view === 'tags' || st.view === 'account')) view = st.view;
           this.swap(view, id);
         },
 
         // ---------------- derived ----------------
         get activeRoom() { return this.rooms.find(r => r.id === this.activeRoomId) || null; },
-        get mood() {
-          if (this.currentView === 'roomDetail') {
-            const i = this.rooms.findIndex(r => r.id === this.activeRoomId);
-            return ['dusk', 'amber', 'ember'][(i < 0 ? 0 : i) % 3];
-          }
-          if (this.currentView === 'team') return 'amber';
-          if (this.currentView === 'tags') return 'dusk';
-          return 'ember';
-        },
+
         get greeting() {
-          const h = new Date().getHours();
+          const h = this.localHour;
           if (h < 5) return 'Still up?';
           if (h < 12) return 'Good morning.';
           if (h < 17) return 'Good afternoon.';
@@ -431,6 +493,7 @@
           this.showQrPreviewModal = false;
           this.showQrSheetModal = false;
           this.showNotifyModal = false;
+          this.showSyncModal = false;
         },
 
         // ---------------- navigation ----------------
@@ -565,6 +628,206 @@
           if (confirm('Delete this task?')) this.activeRoom.tasks = this.activeRoom.tasks.filter(t => t.id !== taskId);
         },
         toggleTaskDone(task) { if (this.lockedToRoom) return this.showToast('Only the owner can tick things off for now.'); task.done = !task.done; },
+        // ---------------- time of day, theme, effects ----------------
+        get tz() {
+          const p = this.profile;
+          if (p.country === 'Australia' && AU_TZ[p.state]) return AU_TZ[p.state];
+          return COUNTRY_TZ[p.country] || undefined;
+        },
+        get localHour() {
+          this.nowTick;
+          try { return parseInt(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: this.tz }).format(new Date()), 10); }
+          catch (e) { return new Date().getHours(); }
+        },
+        get band() { const h = this.localHour; return h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 16 ? 'midday' : h >= 16 && h < 20 ? 'evening' : 'night'; },
+        get variant() {
+          if (this.currentView === 'roomDetail') { const i = this.rooms.findIndex(r => r.id === this.activeRoomId); return 1 + Math.max(i, 0); }
+          return { dashboard: 0, account: 1, team: 2, tags: 3 }[this.currentView] || 0;
+        },
+        get themeVars() {
+          const pal = PALETTES[this.profile.theme === 'light' ? 'light' : 'dark'][this.band];
+          const v = this.variant % 4, c = k => pal.c[(k + v) % 4];
+          return `--base:${pal.base};--dark:${pal.dark};--c1:${c(0)};--c2:${c(1)};--c3:${c(2)};--c4:${c(3)}`;
+        },
+        applyTheme() { document.documentElement.dataset.theme = this.profile.theme === 'light' ? 'light' : 'dark'; },
+        setTheme(t) { this.profile.theme = t; this.applyTheme(); },
+        goAccount() { if (!this.lockedToRoom) this.go('account'); },
+        initEffects() {
+          if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+          const root = document.documentElement; let t1, t2, lastY = window.scrollY;
+          const relax = (ms) => { clearTimeout(t2); t2 = setTimeout(() => { root.style.setProperty('--nx', 0); root.style.setProperty('--ny', 0); }, ms); };
+          window.addEventListener('pointerdown', (e) => {
+            root.style.setProperty('--nx', ((e.clientX / window.innerWidth - .5) * 2).toFixed(2));
+            root.style.setProperty('--ny', ((e.clientY / window.innerHeight - .5) * 2).toFixed(2));
+            root.style.setProperty('--gx', e.clientX + 'px'); root.style.setProperty('--gy', e.clientY + 'px');
+            const g = document.querySelector('.tapglow');
+            if (g) { g.classList.add('on'); clearTimeout(t1); t1 = setTimeout(() => g.classList.remove('on'), 140); }
+            relax(900);
+          }, { passive: true });
+          window.addEventListener('scroll', () => {
+            const dy = window.scrollY - lastY; lastY = window.scrollY;
+            root.style.setProperty('--ny', Math.max(-1, Math.min(1, -dy / 30)).toFixed(2));
+            relax(500);
+          }, { passive: true });
+        },
+
+        // ---------------- reorder rooms ----------------
+        startDrag(e, id) {
+          this.draggingId = id;
+          this._dm = (ev) => this.onDrag(ev); this._de = () => this.endDrag();
+          window.addEventListener('pointermove', this._dm); window.addEventListener('pointerup', this._de); window.addEventListener('pointercancel', this._de);
+        },
+        onDrag(ev) {
+          if (!this.draggingId) return;
+          const y = ev.clientY;
+          if (y < 90) window.scrollBy(0, -14); else if (y > window.innerHeight - 140) window.scrollBy(0, 14);
+          for (const el of document.querySelectorAll('[data-room]')) {
+            const r = el.getBoundingClientRect();
+            if (y >= r.top && y <= r.bottom) {
+              const tid = el.dataset.room;
+              if (tid !== this.draggingId) {
+                const from = this.rooms.findIndex(x => x.id === this.draggingId), to = this.rooms.findIndex(x => x.id === tid);
+                if (from > -1 && to > -1) { const [m] = this.rooms.splice(from, 1); this.rooms.splice(to, 0, m); }
+              }
+              break;
+            }
+          }
+        },
+        endDrag() {
+          this.draggingId = null;
+          window.removeEventListener('pointermove', this._dm); window.removeEventListener('pointerup', this._de); window.removeEventListener('pointercancel', this._de);
+        },
+
+        // ---------------- notifications ----------------
+        async toggleNotify() {
+          if (this.profile.notify) { this.profile.notify = false; return; }
+          if (!('Notification' in window)) return this.showToast('This browser can\u2019t show notifications.');
+          let perm = Notification.permission;
+          if (perm === 'default') perm = await Notification.requestPermission();
+          if (perm === 'granted') { this.profile.notify = true; this.showToast('Notifications on.'); }
+          else this.showToast('Notifications are blocked in your browser settings.');
+        },
+        notifyToday() {
+          try {
+            if (!this.profile.notify || !('Notification' in window) || Notification.permission !== 'granted' || this.lockedToRoom) return;
+            const today = new Date().toDateString();
+            if (localStorage.getItem('oimate_lastnotify') === today) return;
+            const n = this.rooms.reduce((a, r) => a + r.tasks.filter(t => !t.done && t.scheduledAt && new Date(t.scheduledAt).toDateString() === today).length, 0);
+            if (!n) return;
+            localStorage.setItem('oimate_lastnotify', today);
+            navigator.serviceWorker?.ready.then(reg => reg.showNotification('Oi Mate.', { body: `${n} task${n === 1 ? '' : 's'} on today.`, icon: 'icon-192.png' }));
+          } catch (e) {}
+        },
+
+        // ---------------- onboarding ----------------
+        get showOnboarding() { return this.authReady && !this.lockedToRoom && !this.profile.onboarded; },
+        async onbTo(n) { this.fading = true; await new Promise(r => setTimeout(r, 260)); this.onbStep = n; await this.$nextTick(); this.fading = false; },
+        onbNext() { if (this.onbStep >= this.onbTotal - 1) return this.finishOnboarding(); this.onbTo(this.onbStep + 1); },
+        onbBack() { if (this.onbStep > 0) this.onbTo(this.onbStep - 1); },
+        onbGoogle() { localStorage.setItem('oimate_onb', '1'); this.signIn(); },
+        finishOnboarding() { this.profile.onboarded = true; this.onbStep = 0; this.fading = false; window.scrollTo(0, 0); this.persist(); },
+        restartOnboarding() { this.profile.onboarded = false; this.onbStep = 0; },
+
+        // ---------------- Google Calendar (manual pull and push) ----------------
+        captureToken(session) {
+          try {
+            if (session && session.provider_token && localStorage.getItem('oimate_cal_pending') === '1') {
+              const g = { t: session.provider_token, exp: Date.now() + 3300 * 1000 };
+              localStorage.setItem('oimate_gtoken', JSON.stringify(g)); localStorage.removeItem('oimate_cal_pending');
+              this.gtok = g; this.showToast('Google Calendar connected.');
+            } else if (!this.gtok) {
+              const g = JSON.parse(localStorage.getItem('oimate_gtoken') || 'null');
+              if (g && g.exp > Date.now()) this.gtok = g;
+            }
+          } catch (e) {}
+        },
+        get calConnected() { this.nowTick; return !!(this.gtok && this.gtok.exp > Date.now()); },
+        async connectCalendar() {
+          if (!sb) return this.showToast('Cloud isn\u2019t available right now.');
+          localStorage.setItem('oimate_cal_pending', '1');
+          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname, scopes: 'https://www.googleapis.com/auth/calendar.events' } });
+          if (error) this.showToast('Couldn\u2019t reach Google.');
+        },
+        async gfetch(url, opts = {}) {
+          const res = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + this.gtok.t, 'Content-Type': 'application/json' } });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            const why = JSON.stringify(j).toLowerCase();
+            if (why.includes('accessnotconfigured') || why.includes('service_disabled')) throw new Error('api');
+            if (res.status === 401 || res.status === 403) { localStorage.removeItem('oimate_gtoken'); this.gtok = null; throw new Error('auth'); }
+            throw new Error('http ' + res.status);
+          }
+          return res.json();
+        },
+        calError(e) {
+          if (e.message === 'auth') this.showToast('Reconnect Google Calendar to continue.');
+          else if (e.message === 'api') this.showToast('Turn on the Google Calendar API in your Google Cloud project.');
+          else this.showToast('Couldn\u2019t reach your calendar.');
+        },
+        async pullCalendar() {
+          if (!this.calConnected) return this.connectCalendar();
+          this.calBusy = true;
+          try {
+            const now = new Date(), max = new Date(Date.now() + 60 * 864e5);
+            const json = await this.gfetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=100&timeMin=' + encodeURIComponent(now.toISOString()) + '&timeMax=' + encodeURIComponent(max.toISOString()));
+            this.syncItems = this.matchEvents((json.items || []).filter(e => e.status !== 'cancelled'));
+            this.syncMode = 'pull'; this.showSyncModal = true;
+          } catch (e) { this.calError(e); } finally { this.calBusy = false; }
+        },
+        matchEvents(items) {
+          const seen = new Set([...(this.profile.calSeen || []), ...this.rooms.flatMap(r => r.tasks.map(t => t.gcalId).filter(Boolean))]);
+          const digits = s => (s || '').replace(/\D/g, '');
+          const out = [];
+          for (const ev of items) {
+            if (seen.has(ev.id) || !ev.start) continue;
+            const title = ev.summary || 'Appointment';
+            const text = (title + ' ' + (ev.description || '') + ' ' + (ev.location || '')).toLowerCase();
+            const emails = (ev.attendees || []).map(a => (a.email || '').toLowerCase());
+            const hits = []; let reason = '';
+            for (const t of this.tradies) {
+              if (t.email && emails.includes(t.email.toLowerCase())) { hits.push(t.id); reason = reason || t.name + ' is invited'; continue; }
+              if (t.name && t.name.length >= 3 && text.includes(t.name.toLowerCase())) { hits.push(t.id); reason = reason || 'Mentions ' + t.name; continue; }
+              const pd = digits(t.phone);
+              if (pd.length >= 8 && digits(text).includes(pd.slice(-8))) { hits.push(t.id); reason = reason || 'Has ' + t.name + '\u2019s number'; }
+            }
+            if (!hits.length) for (const t of this.tradies) {
+              if ((KEYWORDS[t.trade] || []).some(k => title.toLowerCase().includes(k))) { hits.push(t.id); reason = reason || 'Mentions ' + t.trade.replace(/ \(.*\)/, '').toLowerCase(); }
+            }
+            if (!hits.length) continue;
+            const room = this.rooms.find(r => text.includes(r.name.toLowerCase())) || this.rooms[0];
+            out.push({ id: ev.id, title, desc: (ev.description || ev.location || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200), start: ev.start.dateTime || (ev.start.date + 'T09:00'), tradeIds: [...new Set(hits)], reason, roomId: room ? room.id : '' });
+          }
+          return out;
+        },
+        toLocalInput(iso) { const d = new Date(iso), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; },
+        addCalendarTask(it) {
+          const room = this.rooms.find(r => r.id === it.roomId);
+          if (!room) return this.showToast('Add a room first.');
+          room.tasks.unshift({ id: 'tsk-' + Date.now(), title: it.title, desc: it.desc, tradeIds: it.tradeIds, scheduledAt: this.toLocalInput(it.start), fileName: '', attachment: null, done: false, timestamp: 'From calendar', gcalId: it.id });
+          this.syncItems = this.syncItems.filter(x => x.id !== it.id);
+          this.showToast('Added to ' + room.name + '.');
+        },
+        skipCalendarItem(it) { this.profile.calSeen = [...(this.profile.calSeen || []), it.id]; this.syncItems = this.syncItems.filter(x => x.id !== it.id); },
+        pushCalendar() {
+          if (!this.calConnected) return this.connectCalendar();
+          const start = new Date(); start.setHours(0, 0, 0, 0);
+          const list = [];
+          this.rooms.forEach(room => room.tasks.forEach(task => { if (task.scheduledAt && !task.done && !task.gcalId && new Date(task.scheduledAt) >= start) list.push({ room, task }); }));
+          this.syncItems = list; this.syncMode = 'push'; this.showSyncModal = true;
+        },
+        async doPush() {
+          this.calBusy = true; let ok = 0;
+          try {
+            for (const { room, task } of this.syncItems) {
+              const s = new Date(task.scheduledAt);
+              const body = { summary: `${task.title} (${room.name})`, description: ((task.desc || '') + '\n\nOi Mate room: ' + this.roomUrl(room)).trim(), start: { dateTime: s.toISOString() }, end: { dateTime: new Date(s.getTime() + 36e5).toISOString() } };
+              const json = await this.gfetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', { method: 'POST', body: JSON.stringify(body) });
+              task.gcalId = json.id; ok++;
+            }
+            this.showSyncModal = false; this.showToast(`Pushed ${ok} event${ok === 1 ? '' : 's'}.`);
+          } catch (e) { this.calError(e); }
+          finally { this.calBusy = false; this.syncItems = this.syncItems.filter(it => !it.task.gcalId); }
+        },
         toggleTaskTradie(id) { const a = this.newTask.tradeIds; this.newTask.tradeIds = a.includes(id) ? a.filter(x => x !== id) : [...a, id]; },
         taskTradieLabel(task) {
           const names = (task.tradeIds || []).map(id => this.tradieById(id)).filter(Boolean).map(t => t.name + ' (' + t.trade.replace(/ \(.*\)/, '') + ')');
@@ -623,17 +886,18 @@
 </head>
 <body @keydown.escape.window="closeAllModals()">
 
-<div x-data="appData()" x-init="initApp()">
+<div x-data="appData()" x-init="initApp()" class="themeroot" :style="themeVars">
 
   <!-- ============ BREATHING GRADIENT FIELD ============ -->
-  <div class="field screen-only" :data-mood="mood" aria-hidden="true">
-    <div class="breath">
+  <div class="field screen-only" aria-hidden="true">
+    <div class="nudge"><div class="breath">
       <div class="orb o1"></div>
       <div class="orb o2"></div>
       <div class="orb o3"></div>
       <div class="orb o4"></div>
       <div class="orb o5"></div>
-    </div>
+    </div></div>
+    <div class="tapglow"></div>
     <div class="veil"></div>
   </div>
   <div class="grain screen-only" aria-hidden="true"></div>
@@ -653,29 +917,31 @@
   <div class="screen-only relative z-10 mx-auto max-w-md min-h-screen flex flex-col px-6 pb-36">
 
     <!-- TOAST -->
-    <div x-show="toast" x-cloak x-transition class="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass !rounded-full px-5 py-3 flex items-center gap-4 text-[13px] whitespace-nowrap" style="background:rgba(18,10,22,.88);">
+    <div x-show="toast" x-cloak x-transition class="fixed top-4 left-1/2 -translate-x-1/2 z-50 glass !rounded-full px-5 py-3 flex items-center gap-4 text-[13px] whitespace-nowrap" style="background:rgba(var(--glass-rgb),.88);">
       <span x-text="toast?.msg"></span>
       <button x-show="toast?.action" @click="runToastAction()" class="font-bold underline underline-offset-4" x-text="toast?.actionLabel"></button>
     </div>
 
     <!-- HEADER -->
-    <header class="flex items-center justify-between" style="padding-top:calc(1.25rem + env(safe-area-inset-top));">
-      <div class="flex items-center gap-3">
-        <div class="logo"><i></i></div>
-        <span class="serif text-[24px] leading-none">Oi Mate.</span>
-      </div>
-      <button x-show="!lockedToRoom" x-cloak @click="viewMode = viewMode === 'owner' ? 'tradie' : 'owner'" class="pill-sm" x-text="viewMode === 'owner' ? 'Owner' : 'Tradie'"></button>
+    <header x-show="!showOnboarding" class="flex items-center justify-between" style="padding-top:calc(1.25rem + env(safe-area-inset-top));">
+      <button @click="goDashboard()" class="serif text-[24px] leading-none">Oi Mate.</button>
+      <button x-show="!lockedToRoom" x-cloak @click="goAccount()" class="orb-wrap" aria-label="Profile">
+        <span class="orb-btn" :class="user ? 'in' : ''">
+          <span class="mesh" x-show="user"><i class="m1"></i><i class="m2"></i><i class="m3"></i></span>
+          <span class="dotmark" x-show="!user"></span>
+        </span>
+      </button>
     </header>
 
-    <div x-show="lockedToRoom" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
+    <div x-show="lockedToRoom" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl t2" style="background:rgba(var(--fg-rgb),.12); border:1px solid var(--line);">
       <span x-text="scanStatus === 'loading' ? 'Opening this room\u2026' : scanStatus === 'notfound' ? 'We couldn\u2019t find that room. Ask the owner for a fresh link.' : 'Scanned tag \u00b7 showing this room only'"></span>
     </div>
-    <div x-show="!lockedToRoom && viewMode === 'tradie'" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl flex justify-between items-center t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
+    <div x-show="!lockedToRoom && viewMode === 'tradie'" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl flex justify-between items-center t2" style="background:rgba(var(--fg-rgb),.12); border:1px solid var(--line);">
       <span>Previewing what a tradie sees</span>
-      <button @click="viewMode = 'owner'" class="font-bold underline underline-offset-4 text-white">Exit</button>
+      <button @click="viewMode = 'owner'" class="font-bold underline underline-offset-4" style="color:var(--fg)">Exit</button>
     </div>
 
-    <div class="page flex-1 flex flex-col" :class="fading ? 'is-out' : ''">
+    <div x-show="!showOnboarding" class="page flex-1 flex flex-col" :class="fading ? 'is-out' : ''">
     <!-- ================= HOUSE ================= -->
     <main x-show="currentView === 'dashboard'" x-cloak
           class="flex-1 pt-12 space-y-8">
@@ -685,8 +951,8 @@
         <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="statusLine"></p>
 
         <div x-show="totalTasksCount() > 0" class="mt-6">
-          <div class="h-1 rounded-full overflow-hidden" style="background:rgba(255,255,255,.22);">
-            <div class="h-full rounded-full bg-white transition-all duration-700" :style="'width:' + houseProgressPercent() + '%'"></div>
+          <div class="h-1 rounded-full overflow-hidden" style="background:rgba(var(--fg-rgb),.22);">
+            <div class="prog-fill" :style="'width:' + houseProgressPercent() + '%'"></div>
           </div>
           <p class="t3 text-[12px] mt-2" x-text="houseProgressPercent() + '% complete'"></p>
         </div>
@@ -717,18 +983,20 @@
         </div>
 
         <template x-for="room in rooms" :key="room.id">
-          <button @click="openRoomDetail(room)" class="glass w-full text-left p-5 flex items-center gap-4 active:scale-[.99] transition">
-            <div class="flex-1 min-w-0">
-              <h3 class="serif text-[30px] leading-none truncate" x-text="room.name"></h3>
-              <p class="t2 text-[13px] mt-2.5" x-text="(room.tasks.length === 0 ? 'No tasks yet' : roomDoneCount(room) + ' of ' + room.tasks.length + ' done') + ' · ' + roomTradies(room).length + (roomTradies(room).length === 1 ? ' tradie' : ' tradies')"></p>
-              <p x-show="nextTask(room)" class="t3 text-[12px] mt-1 truncate" x-text="nextTask(room) ? 'Next: ' + nextTask(room).title : ''"></p>
+          <div class="glass roomcard p-4 flex items-stretch gap-2" :class="draggingId === room.id ? 'dragging' : ''" :data-room="room.id">
+            <div class="grip" @pointerdown.prevent="startDrag($event, room.id)" role="button" aria-label="Drag to reorder">
+              <svg width="14" height="20" viewBox="0 0 14 20" fill="currentColor"><circle cx="4" cy="4" r="1.6"/><circle cx="10" cy="4" r="1.6"/><circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="4" cy="16" r="1.6"/><circle cx="10" cy="16" r="1.6"/></svg>
             </div>
-            <svg width="44" height="44" viewBox="0 0 44 44" class="flex-none">
-              <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="3"/>
-              <circle x-show="roomProgressPercent(room) > 0" cx="22" cy="22" r="18" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"
-                      :stroke-dasharray="(roomProgressPercent(room) * 1.131) + ' 113.1'" transform="rotate(-90 22 22)"/>
-            </svg>
-          </button>
+            <button @click="openRoomDetail(room)" class="flex-1 min-w-0 text-left pr-1">
+              <div class="flex items-baseline justify-between gap-3">
+                <h3 class="serif text-[30px] leading-none truncate" x-text="room.name"></h3>
+                <span class="serif text-[26px] leading-none flex-none" x-text="room.tasks.length ? roomProgressPercent(room) + '%' : ''"></span>
+              </div>
+              <div class="prog mt-3"><div class="prog-fill" :style="'width:' + roomProgressPercent(room) + '%'"></div></div>
+              <p class="t2 text-[13px] mt-3" x-text="(room.tasks.length === 0 ? 'No tasks yet' : roomDoneCount(room) + ' of ' + room.tasks.length + ' done') + ' · ' + roomTradies(room).length + (roomTradies(room).length === 1 ? ' tradie' : ' tradies')"></p>
+              <p x-show="nextTask(room)" class="t3 text-[12px] mt-1 truncate" x-text="nextTask(room) ? 'Next: ' + nextTask(room).title : ''"></p>
+            </button>
+          </div>
         </template>
 
         <div x-show="rooms.length === 0" x-cloak class="glass p-6 text-center">
@@ -743,7 +1011,7 @@
           class="flex-1 pt-8 space-y-7">
 
       <div class="flex items-center justify-between">
-        <button x-show="!lockedToRoom" @click="goDashboard()" class="round-btn" aria-label="Back to house">
+        <button x-show="!lockedToRoom" @click="goDashboard()" class="round-btn" aria-label="Back to home">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
         <span x-show="lockedToRoom" class="t3 text-[12px]">Room brief</span>
@@ -779,10 +1047,10 @@
       <section class="space-y-3">
         <h2 class="serif text-[30px] leading-none px-1">Activity</h2>
 
-        <div class="relative pl-5 space-y-3" style="border-left:1px solid rgba(255,255,255,.22); margin-left:6px;">
+        <div class="relative pl-5 space-y-3" style="border-left:1px solid rgba(var(--fg-rgb),.22); margin-left:6px;">
           <template x-for="task in (activeRoom?.tasks || [])" :key="task.id">
             <div class="relative">
-              <span class="absolute -left-[26px] top-6 w-2.5 h-2.5 rounded-full" :style="'background:' + (task.done ? '#fff' : 'rgba(255,255,255,.45)')"></span>
+              <span class="absolute -left-[26px] top-6 w-2.5 h-2.5 rounded-full" :style="'background:' + (task.done ? 'var(--fg)' : 'rgba(var(--fg-rgb),.45)')"></span>
               <div class="glass p-4" :class="task.done ? 'opacity-70' : ''">
                 <div class="flex gap-3">
                   <button class="check mt-0.5" :class="task.done ? 'on' : ''" @click="toggleTaskDone(task)" :aria-label="task.done ? 'Mark as not done' : 'Mark as done'">
@@ -828,31 +1096,6 @@
         <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="tradies.length === 0 ? 'No one yet. Add your first tradie.' : 'Add someone once, then pick them whenever you log a task.'"></p>
       </section>
 
-      <section class="glass p-5 space-y-4">
-        <template x-if="!user">
-          <div class="space-y-4">
-            <div>
-              <h3 class="serif text-[28px] leading-none">Save to the cloud</h3>
-              <p class="t2 text-[14px] leading-relaxed mt-3">Sign in so your site is saved online and tradies can scan stickers from their own phones.</p>
-            </div>
-            <button @click="signIn()" class="btn-white w-full">Continue with Google</button>
-          </div>
-        </template>
-        <template x-if="user">
-          <div class="space-y-4">
-            <div class="flex items-center gap-3">
-              <img x-show="user.picture" :src="user.picture" alt="" class="w-11 h-11 rounded-full flex-none" referrerpolicy="no-referrer">
-              <div class="min-w-0">
-                <p class="font-semibold text-[15px] truncate" x-text="user.name"></p>
-                <p class="t2 text-[12px] truncate" x-text="user.email"></p>
-              </div>
-            </div>
-            <p class="t2 text-[13px]" x-text="syncState === 'saving' ? 'Saving\u2026' : syncState === 'error' ? 'Couldn\u2019t save to the cloud. Your changes are safe on this device.' : 'Saved to the cloud.'"></p>
-            <button @click="signOut()" class="btn-glass w-full">Sign out</button>
-          </div>
-        </template>
-      </section>
-
       <button @click="openAddTradeModal()" class="btn-white w-full flex items-center justify-center gap-2">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Add a tradie
@@ -877,6 +1120,113 @@
       </section>
     </main>
 
+    <!-- ================= PROFILE ================= -->
+    <main x-show="currentView === 'account'" x-cloak class="flex-1 pt-8 space-y-6">
+      <div class="flex items-center justify-between">
+        <button @click="goDashboard()" class="round-btn" aria-label="Back to home"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <span class="t3 text-[12px]" x-text="!user ? 'On this device' : syncState === 'saving' ? 'Saving\u2026' : syncState === 'error' ? 'Not saved to the cloud' : 'Saved to the cloud'"></span>
+      </div>
+
+      <section>
+        <h1 class="serif hero">Profile.</h1>
+        <p class="t2 text-[16px] mt-4" x-text="profile.name ? 'Hi, ' + profile.name.split(' ')[0] + '.' : 'Make it yours.'"></p>
+      </section>
+
+      <section class="glass p-5 space-y-3">
+        <h3 class="serif text-[26px] leading-none">Appearance</h3>
+        <div class="seg">
+          <button :class="profile.theme !== 'light' ? 'on' : ''" @click="setTheme('dark')">Dark</button>
+          <button :class="profile.theme === 'light' ? 'on' : ''" @click="setTheme('light')">Light</button>
+        </div>
+      </section>
+
+      <section class="glass p-5 space-y-4">
+        <h3 class="serif text-[26px] leading-none">Google account</h3>
+        <template x-if="!user">
+          <div class="space-y-3">
+            <p class="t2 text-[14px] leading-relaxed">Link your Google account to save your site online, so tradies can scan stickers from their own phones.</p>
+            <button @click="signIn()" class="btn-white w-full">Link Google account</button>
+          </div>
+        </template>
+        <template x-if="user">
+          <div class="space-y-3">
+            <div class="flex items-center gap-3">
+              <img x-show="user.picture" :src="user.picture" alt="" class="w-11 h-11 rounded-full flex-none" referrerpolicy="no-referrer">
+              <div class="min-w-0">
+                <p class="font-semibold text-[15px] truncate" x-text="user.name"></p>
+                <p class="t2 text-[12px] truncate" x-text="user.email"></p>
+              </div>
+            </div>
+            <button @click="signOut()" class="btn-glass w-full">Sign out</button>
+          </div>
+        </template>
+      </section>
+
+      <section class="glass p-5 space-y-3">
+        <h3 class="serif text-[26px] leading-none">Calendar</h3>
+        <p class="t2 text-[14px] leading-relaxed" x-text="calConnected ? 'Google Calendar is connected for now. Pull in tradie appointments, or push scheduled tasks out.' : 'Connect Google Calendar to pull in tradie appointments, or push your scheduled tasks out.'"></p>
+        <button x-show="!calConnected" @click="connectCalendar()" class="btn-white w-full">Connect Google Calendar</button>
+        <div x-show="calConnected" class="grid grid-cols-2 gap-3">
+          <button @click="pullCalendar()" class="btn-glass !px-3" :disabled="calBusy">Pull events</button>
+          <button @click="pushCalendar()" class="btn-glass !px-3" :disabled="calBusy">Push tasks</button>
+        </div>
+      </section>
+
+      <section class="glass p-5 space-y-4">
+        <h3 class="serif text-[26px] leading-none">Your details</h3>
+        <div><label class="lbl">Name</label><input type="text" x-model="profile.name" class="input" placeholder="Your name"></div>
+        <div><label class="lbl">Mobile</label><input type="tel" x-model="profile.phone" class="input" placeholder="e.g. 0412 345 678"></div>
+        <div><label class="lbl">Email</label><input type="email" x-model="profile.email" class="input" placeholder="you@example.com"></div>
+      </section>
+
+      <section class="glass p-5 space-y-4">
+        <div>
+          <h3 class="serif text-[26px] leading-none">Location</h3>
+          <p class="t2 text-[13px] mt-2">Optional. It tunes the background colours to your time of day.</p>
+        </div>
+        <div>
+          <label class="lbl">Country</label>
+          <select x-model="profile.country" @change="profile.state = ''" class="input">
+            <option value="">Not set</option>
+            <template x-for="c in countries" :key="c"><option :value="c" x-text="c"></option></template>
+          </select>
+        </div>
+        <div x-show="profile.country === 'Australia'">
+          <label class="lbl">State</label>
+          <select x-model="profile.state" class="input">
+            <option value="">Select&hellip;</option>
+            <template x-for="st in auStates" :key="st[0]"><option :value="st[0]" x-text="st[1]"></option></template>
+          </select>
+        </div>
+        <div x-show="profile.country && profile.country !== 'Australia'">
+          <label class="lbl">State / region</label>
+          <input type="text" x-model="profile.state" class="input" placeholder="Optional">
+        </div>
+      </section>
+
+      <section class="glass p-5">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="serif text-[26px] leading-none">Notifications</h3>
+            <p class="t2 text-[13px] mt-2">A gentle heads-up when you open the app and tasks are due today.</p>
+          </div>
+          <button class="sw" :class="profile.notify ? 'on' : ''" @click="toggleNotify()" role="switch" :aria-checked="!!profile.notify" aria-label="Notifications"><i></i></button>
+        </div>
+      </section>
+
+      <section class="glass p-5">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="serif text-[26px] leading-none">Tradie view</h3>
+            <p class="t2 text-[13px] mt-2">Preview what a tradie sees after scanning a sticker.</p>
+          </div>
+          <button class="sw" :class="viewMode === 'tradie' ? 'on' : ''" @click="viewMode = viewMode === 'owner' ? 'tradie' : 'owner'" role="switch" :aria-checked="viewMode === 'tradie'" aria-label="Tradie view"><i></i></button>
+        </div>
+      </section>
+
+      <div class="text-center pt-2"><button @click="restartOnboarding()" class="t3 text-[13px] underline underline-offset-4">Run the welcome again</button></div>
+    </main>
+
     <!-- ================= TAGS ================= -->
     <main x-show="currentView === 'tags'" x-cloak
           class="flex-1 pt-12 space-y-7">
@@ -885,7 +1235,7 @@
         <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="rooms.length === 0 ? 'Add a room first and its sticker will live here.' : 'Tap the stickers you want to print.'"></p>
       </section>
 
-      <p x-show="!user" class="t2 text-[13px] leading-relaxed glass p-4">Sign in on the Team tab first, so these stickers open your real rooms on other phones.</p>
+      <p x-show="!user" class="t2 text-[13px] leading-relaxed glass p-4">Link your Google account in your profile first, so these stickers open your real rooms on other phones.</p>
 
       <div x-show="rooms.length > 0" class="flex items-center justify-between gap-3">
         <span class="t2 text-[13px] font-semibold" x-text="selectedRooms.length + ' of ' + rooms.length + ' selected'"></span>
@@ -949,7 +1299,7 @@
       <div @click.outside="showDeleteRoomModal = false" class="sheet text-center space-y-5">
         <div>
           <h3 class="serif text-[30px] leading-none">Delete room?</h3>
-          <p class="t2 text-[14px] mt-3 leading-relaxed">This removes <strong class="text-white" x-text="roomToDelete?.name"></strong> and everything logged in it. Its QR sticker will stop working.</p>
+          <p class="t2 text-[14px] mt-3 leading-relaxed">This removes <strong style="color:var(--fg)" x-text="roomToDelete?.name"></strong> and everything logged in it. Its QR sticker will stop working.</p>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <button @click="showDeleteRoomModal = false; roomToDelete = null;" class="btn-glass !px-4">Cancel</button>
@@ -1067,11 +1417,133 @@
       </div>
     </div>
 
+    <!-- ================= MODAL: CALENDAR SYNC ================= -->
+    <div x-show="showSyncModal" x-cloak x-transition.opacity.duration.300ms class="scrim" style="align-items:center;">
+      <div @click.outside="showSyncModal = false" class="sheet space-y-5" style="max-width:440px;">
+        <div class="flex justify-between items-start gap-3">
+          <div>
+            <h3 class="serif text-[30px] leading-none" x-text="syncMode === 'pull' ? 'From your calendar' : 'To your calendar'"></h3>
+            <p class="t2 text-[13px] mt-2" x-text="syncMode === 'pull' ? (syncItems.length ? 'These look like tradie jobs. Pick a room and add the ones you want.' : 'No new tradie appointments in the next 60 days.') : (syncItems.length ? 'These scheduled tasks aren\u2019t in your calendar yet.' : 'Nothing to push. Give a task a date and time first.')"></p>
+          </div>
+          <button @click="showSyncModal = false" class="round-btn flex-none" aria-label="Close">&times;</button>
+        </div>
+        <template x-if="syncMode === 'pull'">
+          <div class="space-y-3">
+            <template x-for="it in syncItems" :key="it.id">
+              <div class="p-4 rounded-3xl space-y-3" style="background:rgba(var(--fg-rgb),.07); border:1px solid var(--line);">
+                <div>
+                  <p class="font-semibold text-[15px]" x-text="it.title"></p>
+                  <p class="t2 text-[12px]" x-text="fmtWhen(it.start) + (it.reason ? ' · ' + it.reason : '')"></p>
+                </div>
+                <select x-model="it.roomId" class="input"><template x-for="r in rooms" :key="r.id"><option :value="r.id" x-text="r.name"></option></template></select>
+                <div class="flex gap-3">
+                  <button @click="addCalendarTask(it)" class="btn-white flex-1 !py-2.5 !text-[14px]">Add as task</button>
+                  <button @click="skipCalendarItem(it)" class="btn-glass !py-2.5 !text-[14px]">Skip</button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+        <template x-if="syncMode === 'push'">
+          <div class="space-y-3">
+            <template x-for="it in syncItems" :key="it.task.id">
+              <div class="flex justify-between gap-3 text-[14px]"><span class="font-semibold truncate" x-text="it.task.title"></span><span class="t2 flex-none" x-text="fmtWhen(it.task.scheduledAt)"></span></div>
+            </template>
+            <button x-show="syncItems.length" @click="doPush()" class="btn-white w-full" :disabled="calBusy" x-text="'Push ' + syncItems.length + (syncItems.length === 1 ? ' event' : ' events')"></button>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- ================= ONBOARDING ================= -->
+    <div x-show="showOnboarding" x-cloak class="fixed inset-0 z-[60] overflow-y-auto">
+      <div class="mx-auto max-w-md min-h-screen flex flex-col px-6" style="padding-top:calc(1.25rem + env(safe-area-inset-top)); padding-bottom:calc(1.75rem + env(safe-area-inset-bottom));">
+        <div>
+          <div class="flex items-center justify-between h-10">
+            <button x-show="onbStep > 0" @click="onbBack()" class="round-btn" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <span x-show="onbStep === 0"></span>
+            <button @click="finishOnboarding()" class="t3 text-[13px]">Skip all</button>
+          </div>
+          <div class="onb-progress" x-show="onbStep > 0"><i :style="'width:' + (onbStep / (onbTotal - 1) * 100) + '%'"></i></div>
+        </div>
+
+        <div class="page flex-1 flex flex-col justify-center py-8" :class="fading ? 'is-out' : ''">
+
+          <div x-show="onbStep === 0" class="text-center flex flex-col items-center gap-7">
+            <h1 class="serif hero">Let&rsquo;s organise the noise.</h1>
+            <p class="t2 text-[16px] leading-snug max-w-[28ch]">A calm place to put down everything that&rsquo;s on your mind, one room at a time.</p>
+            <div class="orb-big mt-4">
+              <button @click="onbNext()" class="orb-btn in" aria-label="Let's go">
+                <span class="mesh"><i class="m1"></i><i class="m2"></i><i class="m3"></i><i class="m4"></i></span>
+                <span class="serif text-[30px] relative" style="color:#fff; text-shadow:0 1px 14px rgba(0,0,0,.35);">Let&rsquo;s go</span>
+              </button>
+            </div>
+          </div>
+
+          <div x-show="onbStep === 1" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">Bring your Google account along?</h2>
+            <p class="t2 text-[16px] leading-snug">We&rsquo;ll fill in your details for you, and later you can pull tradie appointments in from your calendar.</p>
+            <div class="space-y-3 pt-2">
+              <template x-if="!user"><button @click="onbGoogle()" class="btn-white w-full">Continue with Google</button></template>
+              <template x-if="user"><div class="space-y-3"><p class="t2 text-[14px]" x-text="'Linked as ' + user.email"></p><button @click="onbNext()" class="btn-white w-full">Continue</button></div></template>
+              <button x-show="!user" @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip for now</button>
+            </div>
+          </div>
+
+          <div x-show="onbStep === 2" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">What should we call you?</h2>
+            <input type="text" x-model="profile.name" class="big-input" placeholder="Your name" autocomplete="name" @keydown.enter="onbNext()">
+            <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
+          </div>
+
+          <div x-show="onbStep === 3" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">Your mobile number</h2>
+            <p class="t2 text-[16px] leading-snug">So tradies can reach you.</p>
+            <input type="tel" x-model="profile.phone" class="big-input" placeholder="0412 345 678" autocomplete="tel" @keydown.enter="onbNext()">
+            <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
+          </div>
+
+          <div x-show="onbStep === 4" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">Your email</h2>
+            <p class="t2 text-[16px] leading-snug">For anything that needs a written record.</p>
+            <input type="email" x-model="profile.email" class="big-input" placeholder="you@example.com" autocomplete="email" @keydown.enter="onbNext()">
+            <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
+          </div>
+
+          <div x-show="onbStep === 5" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">Where&rsquo;s the build?</h2>
+            <p class="t2 text-[16px] leading-snug">This tunes the colours to your time of day.</p>
+            <select x-model="profile.country" @change="profile.state = ''" class="big-input">
+              <option value="">Choose a country</option>
+              <template x-for="c in countries" :key="c"><option :value="c" x-text="c"></option></template>
+            </select>
+            <select x-show="profile.country === 'Australia'" x-model="profile.state" class="big-input">
+              <option value="">Choose a state</option>
+              <template x-for="st in auStates" :key="st[0]"><option :value="st[0]" x-text="st[1]"></option></template>
+            </select>
+            <input x-show="profile.country && profile.country !== 'Australia'" type="text" x-model="profile.state" class="big-input" placeholder="State / region (optional)">
+            <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
+          </div>
+
+          <div x-show="onbStep === 6" class="space-y-6">
+            <h2 class="serif text-[44px] leading-[1]">A gentle nudge now and then?</h2>
+            <p class="t2 text-[16px] leading-snug">We&rsquo;ll let you know when tasks are due today. You can change this any time.</p>
+            <div class="glass p-5 flex items-center justify-between gap-4">
+              <span class="font-semibold text-[15px]">Notifications</span>
+              <button class="sw" :class="profile.notify ? 'on' : ''" @click="toggleNotify()" role="switch" :aria-checked="!!profile.notify" aria-label="Notifications"><i></i></button>
+            </div>
+            <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
     <!-- ================= BOTTOM NAV ================= -->
-    <nav x-show="!lockedToRoom" x-cloak class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4" style="padding-bottom:calc(1rem + env(safe-area-inset-bottom));">
+    <nav x-show="!lockedToRoom && !showOnboarding" x-cloak class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4" style="padding-bottom:calc(1rem + env(safe-area-inset-bottom));">
       <div class="glass flex w-full max-w-sm p-1.5 gap-1" style="border-radius:9999px;">
-        <button class="nav-item" :class="currentView === 'dashboard' ? 'on' : ''" @click="goDashboard()">House</button>
-        <button class="nav-item" :class="currentView === 'roomDetail' ? 'on' : ''" @click="openLastRoom()">Room</button>
+        <button class="nav-item" :class="currentView === 'dashboard' ? 'on' : ''" @click="goDashboard()">Home</button>
+        <button class="nav-item" :class="currentView === 'roomDetail' ? 'on' : ''" @click="openLastRoom()">Rooms</button>
         <button class="nav-item" :class="currentView === 'team' ? 'on' : ''" @click="goTeam()">Team</button>
         <button class="nav-item" :class="currentView === 'tags' ? 'on' : ''" @click="goTags()">Tags</button>
       </div>

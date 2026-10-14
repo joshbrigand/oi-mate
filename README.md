@@ -43,3 +43,12 @@ If you installed an earlier version, delete the old icon first so the new one sh
 4. Open the app, Team tab, Continue with Google.
 Tradies scanning a sticker see only that room (names and trades, no phone numbers). They can't edit anything yet.
 Free Supabase projects pause after a week with no activity; restore from the Supabase dashboard if that happens.
+
+## v6: profile, onboarding, calendar
+- The orb at the top right opens your Profile (theme, Google account, calendar, details, location, notifications).
+- First run walks you through a gentle welcome. Everything can be skipped and edited later in Profile.
+- Background colours follow your local time of day (set a country and state in Profile to use that place's time).
+- Calendar needs one extra Google setup step (the first time only):
+  1. In Google Cloud Console, open APIs & Services > Library, find "Google Calendar API" and press Enable.
+  2. In Google Auth Platform > Data Access, add the scope ".../auth/calendar.events".
+  3. In the app: Profile > Calendar > Connect Google Calendar. The connection lasts about an hour, then reconnect.

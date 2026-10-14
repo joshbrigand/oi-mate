@@ -1,4 +1,4 @@
-const CACHE_NAME = 'oi-mate-v7';
+const CACHE_NAME = 'oi-mate-v8';
 const CORE_ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

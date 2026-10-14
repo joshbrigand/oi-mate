@@ -837,11 +837,23 @@
             if (!hits.length) for (const t of this.tradies) {
               if ((KEYWORDS[t.trade] || []).some(k => title.toLowerCase().includes(k))) { hits.push(t.id); reason = reason || 'Mentions ' + t.trade.replace(/ \(.*\)/, '').toLowerCase(); }
             }
-            if (!hits.length) continue;
-            const room = this.rooms.find(r => text.includes(r.name.toLowerCase())) || this.rooms[0];
+            if (!hits.length && /\btradies?\b/i.test(title)) reason = 'Marked as a tradie job';
+            if (!hits.length && !reason) continue;
+            const room = this.guessRoom(text);
             out.push({ id: ev.id, title, desc: (ev.description || ev.location || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200), start: ev.start.dateTime || (ev.start.date + 'T09:00'), tradeIds: [...new Set(hits)], reason, roomId: room ? room.id : '' });
           }
           return out;
+        },
+        guessRoom(text) {
+          const stop = new Set(['main', 'room', 'the', 'and']);
+          let best = null, bestScore = 0;
+          for (const r of this.rooms) {
+            const name = r.name.toLowerCase();
+            let score = text.includes(name) ? 10 : 0;
+            name.split(/[^a-z]+/).filter(w => w.length >= 4 && !stop.has(w)).forEach(w => { if (text.includes(w)) score += 1; });
+            if (score > bestScore) { best = r; bestScore = score; }
+          }
+          return best || this.rooms[0];
         },
         toLocalInput(iso) { const d = new Date(iso), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; },
         addCalendarTask(it) {

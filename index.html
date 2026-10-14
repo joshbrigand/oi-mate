@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Oi Mate. — Site Manager & Job Tracker</title>
   <meta name="description" content="Scan a room's QR tag to see the brief, or run the whole site from the owner dashboard.">
   <meta name="theme-color" content="#14070E">
@@ -109,7 +109,7 @@
     }
     .lbl{ font-size:12px; font-weight:600; color:var(--t2); display:block; margin-bottom:6px; }
     .input{
-      width:100%; padding:13px 14px; font-size:14px; color:var(--fg); color-scheme:dark;
+      width:100%; padding:13px 14px; font-size:16px; color:var(--fg); color-scheme:dark;
       background:rgba(var(--fg-rgb),.08); border:1px solid rgba(var(--fg-rgb),.18); border-radius:16px;
     }
     .input::placeholder{ color:rgba(var(--fg-rgb),.40); }
@@ -192,6 +192,22 @@
     .big-input::placeholder{ color:rgba(var(--fg-rgb),.3); }
     .big-input:focus{ outline:none; border-bottom-color:var(--fg); }
     select.big-input{ color-scheme:dark; } html[data-theme="light"] select.big-input{ color-scheme:light; }
+
+    html, body{ touch-action:pan-x pan-y; -webkit-text-size-adjust:100%; overscroll-behavior-y:none; }
+    /* keep autofilled fields transparent instead of the browser's yellow */
+    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, input:-webkit-autofill:active, select:-webkit-autofill, textarea:-webkit-autofill{
+      -webkit-text-fill-color:var(--fg); caret-color:var(--fg); -webkit-box-shadow:0 0 0 1000px transparent inset; box-shadow:0 0 0 1000px transparent inset;
+      transition:background-color 600000s 0s, color 600000s 0s;
+    }
+    input:autofill{ background-color:transparent !important; color:var(--fg) !important; }
+
+    /* onboarding: every step sits in one grid cell and cross-fades, so nothing reflows or overlaps */
+    .onb-stack{ display:grid; align-content:center; }
+    .onb-step{ grid-area:1 / 1; align-self:center; display:flex; flex-direction:column; justify-content:center; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .3s ease, visibility 0s linear .3s; }
+    .onb-step.on{ opacity:1; visibility:visible; pointer-events:auto; transition:opacity .6s ease .3s, visibility 0s linear .3s; }
+    .initials{ position:relative; font-family:'Instrument Serif',Georgia,serif; font-size:18px; letter-spacing:.02em; color:var(--fg); }
+    .orb-btn.in .initials{ text-shadow:0 1px 10px rgba(0,0,0,.4); }
+    html[data-theme="light"] .orb-btn.in .initials{ text-shadow:none; }
 
     /* ---------- printing: stickers only, no headers/footers, never cut off ---------- */
     #printArea{ display:none; }
@@ -302,6 +318,16 @@
 
         // ---------------- lifecycle ----------------
         async initApp() {
+          window.__oimateBooted = true;
+          document.addEventListener('gesturestart', (e) => e.preventDefault());
+          try {
+            const q = new URLSearchParams(window.location.search), h = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+            if (q.get('error') || h.get('error') || q.get('error_description') || h.get('error_description')) {
+              history.replaceState(null, '', window.location.pathname);
+              ['oimate_onb', 'oimate_cal_pending'].forEach(k => localStorage.removeItem(k));
+              setTimeout(() => this.showToast('Google sign-in didn\u2019t finish. Please try again.'), 700);
+            }
+          } catch (e) {}
           setTimeout(() => { this.fading = false; }, 80);
           const scanId = (window.location.hash.match(/^#\/r\/(.+)$/) || [])[1];
           if (scanId) { this.lockedToRoom = true; this.viewMode = 'tradie'; this.scanStatus = 'loading'; }
@@ -338,7 +364,10 @@
               if (ev === 'SIGNED_OUT') { setTimeout(() => { this.user = null; this.cloudReady = false; this.syncState = 'idle'; }, 0); }
               else if (ev === 'SIGNED_IN') { setTimeout(() => this.handleSession(session), 0); }
             });
-            try { const { data } = await sb.auth.getSession(); await this.handleSession(data.session); } catch (e) { console.warn(e); }
+            try {
+              const { data } = await Promise.race([sb.auth.getSession(), new Promise(r => setTimeout(() => r({ data: { session: null } }), 8000))]);
+              await this.handleSession(data.session);
+            } catch (e) { console.warn(e); }
           }
           this.authReady = true;
           this.applyTheme(); this.notifyToday();
@@ -411,7 +440,7 @@
         },
         async signIn() {
           if (!sb) return this.showToast('Cloud sign-in isn\u2019t available right now.');
-          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname, queryParams: { prompt: 'select_account' } } });
           if (error) this.showToast('Couldn\u2019t start Google sign-in.');
         },
         async signOut() {
@@ -629,6 +658,16 @@
         },
         toggleTaskDone(task) { if (this.lockedToRoom) return this.showToast('Only the owner can tick things off for now.'); task.done = !task.done; },
         // ---------------- time of day, theme, effects ----------------
+        get initials() {
+          const src = (this.profile.name || (this.user && this.user.name) || '').trim();
+          if (!src) return '';
+          const parts = src.split(/\s+/).filter(Boolean);
+          return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+        },
+        resetAuth() {
+          try { ['oimate_onb', 'oimate_cal_pending', 'oimate_gtoken'].forEach(k => localStorage.removeItem(k)); Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+          window.location.replace(window.location.pathname);
+        },
         get tz() {
           const p = this.profile;
           if (p.country === 'Australia' && AU_TZ[p.state]) return AU_TZ[p.state];
@@ -721,7 +760,7 @@
 
         // ---------------- onboarding ----------------
         get showOnboarding() { return this.authReady && !this.lockedToRoom && !this.profile.onboarded; },
-        async onbTo(n) { this.fading = true; await new Promise(r => setTimeout(r, 260)); this.onbStep = n; await this.$nextTick(); this.fading = false; },
+        onbTo(n) { this.onbStep = n; },
         onbNext() { if (this.onbStep >= this.onbTotal - 1) return this.finishOnboarding(); this.onbTo(this.onbStep + 1); },
         onbBack() { if (this.onbStep > 0) this.onbTo(this.onbStep - 1); },
         onbGoogle() { localStorage.setItem('oimate_onb', '1'); this.signIn(); },
@@ -745,7 +784,7 @@
         async connectCalendar() {
           if (!sb) return this.showToast('Cloud isn\u2019t available right now.');
           localStorage.setItem('oimate_cal_pending', '1');
-          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname, scopes: 'https://www.googleapis.com/auth/calendar.events' } });
+          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname, scopes: 'https://www.googleapis.com/auth/calendar.events', queryParams: { prompt: 'select_account' } } });
           if (error) this.showToast('Couldn\u2019t reach Google.');
         },
         async gfetch(url, opts = {}) {
@@ -886,6 +925,11 @@
 </head>
 <body @keydown.escape.window="closeAllModals()">
 
+<div id="boot-help" style="display:none; position:fixed; left:0; right:0; bottom:28px; text-align:center; z-index:99;">
+  <button onclick="try{['oimate_onb','oimate_cal_pending','oimate_gtoken'].forEach(function(k){localStorage.removeItem(k)});Object.keys(localStorage).filter(function(k){return k.indexOf('sb-')===0}).forEach(function(k){localStorage.removeItem(k)})}catch(e){}location.replace(location.pathname)" style="background:#fff; color:#1B1020; border-radius:9999px; padding:12px 20px; font:600 14px Inter,system-ui,sans-serif; box-shadow:0 10px 30px rgba(0,0,0,.4);">Stuck? Tap to reset sign-in</button>
+</div>
+<script>setTimeout(function(){ if(!window.__oimateBooted){ var e=document.getElementById('boot-help'); if(e) e.style.display='block'; } }, 6000);</script>
+
 <div x-data="appData()" x-init="initApp()" class="themeroot" :style="themeVars">
 
   <!-- ============ BREATHING GRADIENT FIELD ============ -->
@@ -928,7 +972,8 @@
       <button x-show="!lockedToRoom" x-cloak @click="goAccount()" class="orb-wrap" aria-label="Profile">
         <span class="orb-btn" :class="user ? 'in' : ''">
           <span class="mesh" x-show="user"><i class="m1"></i><i class="m2"></i><i class="m3"></i></span>
-          <span class="dotmark" x-show="!user"></span>
+          <span class="dotmark" x-show="!initials"></span>
+          <span class="initials" x-show="initials" x-text="initials"></span>
         </span>
       </button>
     </header>
@@ -1146,6 +1191,7 @@
           <div class="space-y-3">
             <p class="t2 text-[14px] leading-relaxed">Link your Google account to save your site online, so tradies can scan stickers from their own phones.</p>
             <button @click="signIn()" class="btn-white w-full">Link Google account</button>
+            <button @click="resetAuth()" class="t3 text-[12px] underline underline-offset-4 w-full text-center">Trouble signing in? Reset</button>
           </div>
         </template>
         <template x-if="user">
@@ -1457,7 +1503,7 @@
 
     <!-- ================= ONBOARDING ================= -->
     <div x-show="showOnboarding" x-cloak class="fixed inset-0 z-[60] overflow-y-auto">
-      <div class="mx-auto max-w-md min-h-screen flex flex-col px-6" style="padding-top:calc(1.25rem + env(safe-area-inset-top)); padding-bottom:calc(1.75rem + env(safe-area-inset-bottom));">
+      <div class="mx-auto max-w-md flex flex-col px-6" style="min-height:100vh; min-height:100dvh; padding-top:calc(1.25rem + env(safe-area-inset-top)); padding-bottom:calc(1.75rem + env(safe-area-inset-bottom));">
         <div>
           <div class="flex items-center justify-between h-10">
             <button x-show="onbStep > 0" @click="onbBack()" class="round-btn" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
@@ -1467,9 +1513,9 @@
           <div class="onb-progress" x-show="onbStep > 0"><i :style="'width:' + (onbStep / (onbTotal - 1) * 100) + '%'"></i></div>
         </div>
 
-        <div class="page flex-1 flex flex-col justify-center py-8" :class="fading ? 'is-out' : ''">
+        <div class="onb-stack flex-1 py-8">
 
-          <div x-show="onbStep === 0" class="text-center flex flex-col items-center gap-7">
+          <div class="onb-step text-center flex flex-col items-center gap-7" :class="onbStep === 0 ? 'on' : ''">
             <h1 class="serif hero">Let&rsquo;s organise the noise.</h1>
             <p class="t2 text-[16px] leading-snug max-w-[28ch]">A calm place to put down everything that&rsquo;s on your mind, one room at a time.</p>
             <div class="orb-big mt-4">
@@ -1480,7 +1526,7 @@
             </div>
           </div>
 
-          <div x-show="onbStep === 1" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 1 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">Bring your Google account along?</h2>
             <p class="t2 text-[16px] leading-snug">We&rsquo;ll fill in your details for you, and later you can pull tradie appointments in from your calendar.</p>
             <div class="space-y-3 pt-2">
@@ -1490,27 +1536,27 @@
             </div>
           </div>
 
-          <div x-show="onbStep === 2" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 2 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">What should we call you?</h2>
             <input type="text" x-model="profile.name" class="big-input" placeholder="Your name" autocomplete="name" @keydown.enter="onbNext()">
             <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
           </div>
 
-          <div x-show="onbStep === 3" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 3 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">Your mobile number</h2>
             <p class="t2 text-[16px] leading-snug">So tradies can reach you.</p>
             <input type="tel" x-model="profile.phone" class="big-input" placeholder="0412 345 678" autocomplete="tel" @keydown.enter="onbNext()">
             <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
           </div>
 
-          <div x-show="onbStep === 4" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 4 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">Your email</h2>
             <p class="t2 text-[16px] leading-snug">For anything that needs a written record.</p>
             <input type="email" x-model="profile.email" class="big-input" placeholder="you@example.com" autocomplete="email" @keydown.enter="onbNext()">
             <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
           </div>
 
-          <div x-show="onbStep === 5" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 5 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">Where&rsquo;s the build?</h2>
             <p class="t2 text-[16px] leading-snug">This tunes the colours to your time of day.</p>
             <select x-model="profile.country" @change="profile.state = ''" class="big-input">
@@ -1525,7 +1571,7 @@
             <div class="space-y-3 pt-4"><button @click="onbNext()" class="btn-white w-full">Continue</button><button @click="onbNext()" class="t3 text-[14px] w-full py-2">Skip</button></div>
           </div>
 
-          <div x-show="onbStep === 6" class="space-y-6">
+          <div class="onb-step space-y-6" :class="onbStep === 6 ? 'on' : ''">
             <h2 class="serif text-[44px] leading-[1]">A gentle nudge now and then?</h2>
             <p class="t2 text-[16px] leading-snug">We&rsquo;ll let you know when tasks are due today. You can change this any time.</p>
             <div class="glass p-5 flex items-center justify-between gap-4">
@@ -1542,8 +1588,7 @@
     <!-- ================= BOTTOM NAV ================= -->
     <nav x-show="!lockedToRoom && !showOnboarding" x-cloak class="fixed bottom-0 inset-x-0 z-30 flex justify-center px-4" style="padding-bottom:calc(1rem + env(safe-area-inset-bottom));">
       <div class="glass flex w-full max-w-sm p-1.5 gap-1" style="border-radius:9999px;">
-        <button class="nav-item" :class="currentView === 'dashboard' ? 'on' : ''" @click="goDashboard()">Home</button>
-        <button class="nav-item" :class="currentView === 'roomDetail' ? 'on' : ''" @click="openLastRoom()">Rooms</button>
+        <button class="nav-item" :class="currentView === 'dashboard' || currentView === 'roomDetail' ? 'on' : ''" @click="goDashboard()">Home</button>
         <button class="nav-item" :class="currentView === 'team' ? 'on' : ''" @click="goTeam()">Team</button>
         <button class="nav-item" :class="currentView === 'tags' ? 'on' : ''" @click="goTags()">Tags</button>
       </div>

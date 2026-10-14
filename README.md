@@ -35,3 +35,11 @@ use your own domain) before printing, or the stickers will stop working.
    Android: open it in Chrome, menu (three dots), Install app.
 3. It opens full-screen with the Oi Mate icon, no browser bar.
 If you installed an earlier version, delete the old icon first so the new one shows.
+
+## Cloud setup (v5)
+1. Supabase > SQL Editor > New query: paste `supabase-setup.sql`, then Run.
+2. Supabase > Authentication > Sign In / Providers > Google: switch on, paste your Google client ID and secret.
+3. Supabase > Authentication > URL Configuration: set Site URL to your GitHub Pages address and add the same address under Redirect URLs.
+4. Open the app, Team tab, Continue with Google.
+Tradies scanning a sticker see only that room (names and trades, no phone numbers). They can't edit anything yet.
+Free Supabase projects pause after a week with no activity; restore from the Supabase dashboard if that happens.

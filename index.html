@@ -20,6 +20,7 @@
 
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     /* ---------- animatable colours, so moods cross-fade instead of snapping ---------- */
     @property --base { syntax:'<color>'; inherits:true; initial-value:#3A0D1E; }
@@ -144,8 +145,11 @@
     @media (prefers-reduced-motion: reduce){
       .breath, .orb, .logo::before{ animation:none !important; }
       .field{ transition:none; }
+      .page{ transition:none; }
     }
 
+    .page{ transition:opacity .55s ease; }
+    .page.is-out{ opacity:0; transition-duration:.26s; }
     .btn-danger{ background:rgba(229,72,77,.16); border:1px solid rgba(255,140,140,.45); color:#FFC2BF; border-radius:9999px; font-weight:600; font-size:15px; padding:15px 22px; }
     .chip.on{ background:#fff; color:#1B1020; border-color:#fff; font-weight:600; }
     .tag{ position:relative; border-radius:28px; padding:12px; text-align:center; background:rgba(255,255,255,.08); border:2px solid transparent; outline:1px solid var(--line); transition:border-color .15s ease, background .15s ease; cursor:pointer; }
@@ -179,6 +183,12 @@
     async function idbPut(k, v){ const db = await idb(); return new Promise((res, rej) => { const t = db.transaction('files', 'readwrite'); t.objectStore('files').put(v, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); }
     async function idbGet(k){ const db = await idb(); return new Promise((res, rej) => { const q = db.transaction('files').objectStore('files').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); }
 
+    /* ---- cloud backend (public keys, safe in the browser; data is protected by row-level security) ---- */
+    const SB_URL = 'https://zbwwvdthyqxdvwyylkhd.supabase.co';
+    const SB_KEY = 'sb_publishable_nvGgHiHsfBq4F89k2YnyAA_Die1BC-O';
+    let sb = null;
+    try { if (window.supabase) sb = window.supabase.createClient(SB_URL, SB_KEY); } catch (e) { console.warn('Cloud unavailable:', e); }
+
     window.appData = function () {
       return {
         viewMode: 'owner',          // 'owner' | 'tradie'
@@ -198,6 +208,8 @@
         showNotifyModal: false,
         notifyList: [], notifyRoom: null, notifyTask: null,
         selectedTagIds: [], stickerSize: 150,
+        fading: true, _navTok: 0,
+        user: null, authReady: false, cloudReady: false, syncState: 'idle', scanStatus: 'idle', _cacheOwner: null,
         editingTradieId: null,
 
         roomPresets: ['Main Bathroom', 'Living Room', 'Kitchen', 'Laundry', 'Master Bedroom', 'Deck / Patio', 'Garage'],
@@ -231,60 +243,121 @@
         ],
 
         // ---------------- lifecycle ----------------
-        initApp() {
-          try {
-            const saved = localStorage.getItem('oimate_data_v2');
-            if (saved) {
-              const parsed = JSON.parse(saved);
-              if (parsed.rooms?.length) this.rooms = parsed.rooms;
-              if (parsed.tradies) this.tradies = parsed.tradies;
-            }
-          } catch (e) { console.warn('Could not restore saved data:', e); }
+        async initApp() {
+          setTimeout(() => { this.fading = false; }, 80);
+          const scanId = (window.location.hash.match(/^#\/r\/(.+)$/) || [])[1];
+          if (scanId) { this.lockedToRoom = true; this.viewMode = 'tradie'; this.scanStatus = 'loading'; }
 
-          this.rooms.forEach(r => r.tasks.forEach(t => { if (!t.tradeIds) { t.tradeIds = t.tradeId ? [t.tradeId] : []; delete t.tradeId; } }));
+          // A scanned link never touches the owner's saved data
+          if (!scanId) {
+            try {
+              const saved = localStorage.getItem('oimate_data_v2');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                this._cacheOwner = parsed.owner || null;
+                if (parsed.rooms?.length) this.rooms = parsed.rooms;
+                if (parsed.tradies) this.tradies = parsed.tradies;
+              }
+            } catch (e) { console.warn('Could not restore saved data:', e); }
+          }
+          this.migrateTasks();
+
           this.$watch('rooms', () => this.persist());
           this.$watch('tradies', () => this.persist());
-
-          // A tradie arriving from a scanned QR link (#/r/room-id) is locked to that room.
-          // Normal in-app navigation never touches the URL hash, so the owner is never locked.
-          this.handleScan();
-          window.addEventListener('hashchange', () => this.handleScan());
+          window.addEventListener('hashchange', () => { if (/^#\/r\//.test(window.location.hash)) window.location.reload(); });
           window.addEventListener('popstate', (e) => this.onPop(e));
-          if (!this.lockedToRoom) {
-            try { history.replaceState({ view: 'dashboard', roomId: null }, ''); } catch (e) {}
-          }
+          if (!this.lockedToRoom) { try { history.replaceState({ view: 'dashboard', roomId: null }, ''); } catch (e) {} }
+          if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(() => {}); }
 
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+          if (scanId) { await this.loadScanned(scanId); return; }
+          if (sb) {
+            sb.auth.onAuthStateChange((ev, session) => {
+              if (ev === 'SIGNED_OUT') { setTimeout(() => { this.user = null; this.cloudReady = false; this.syncState = 'idle'; }, 0); }
+              else if (ev === 'SIGNED_IN') { setTimeout(() => this.handleSession(session), 0); }
+            });
+            try { const { data } = await sb.auth.getSession(); await this.handleSession(data.session); } catch (e) { console.warn(e); }
           }
+          this.authReady = true;
+        },
+        migrateTasks() {
+          this.rooms.forEach(r => (r.tasks || []).forEach(t => { if (!t.tradeIds) { t.tradeIds = t.tradeId ? [t.tradeId] : []; delete t.tradeId; } }));
         },
         persist() {
-          try { localStorage.setItem('oimate_data_v2', JSON.stringify({ rooms: this.rooms, tradies: this.tradies })); }
+          if (this.lockedToRoom) return;
+          try { localStorage.setItem('oimate_data_v2', JSON.stringify({ rooms: this.rooms, tradies: this.tradies, owner: this.user?.id || this._cacheOwner || null })); }
           catch (e) { console.warn('Could not save data:', e); }
+          if (this.user && this.cloudReady) { clearTimeout(this._saveT); this._saveT = setTimeout(() => this.saveCloud(), 900); }
         },
 
-        handleScan() {
-          const match = window.location.hash.match(/^#\/r\/(.+)$/);
-          if (!match) return;
-          const room = this.rooms.find(r => r.id === match[1]);
-          if (!room) return;
-          this.activeRoomId = room.id;
-          this.lastRoomId = room.id;
-          this.currentView = 'roomDetail';
-          this.viewMode = 'tradie';
-          this.lockedToRoom = true;
+        async loadScanned(id) {
+          this.scanStatus = 'loading';
+          let found = null;
+          if (sb) { try { const { data } = await sb.rpc('get_room_public', { p_room: id }); if (data && data.room) found = data; } catch (e) { console.warn(e); } }
+          if (!found) {
+            try {
+              const p = JSON.parse(localStorage.getItem('oimate_data_v2') || 'null');
+              const r = p?.rooms?.find(x => x.id === id);
+              if (r) found = { room: r, tradies: (p.tradies || []).map(t => ({ id: t.id, name: t.name, trade: t.trade })) };
+            } catch (e) {}
+          }
+          if (!found) { this.scanStatus = 'notfound'; return; }
+          this.rooms = [found.room]; this.tradies = found.tradies || [];
+          this.migrateTasks();
+          this.activeRoomId = found.room.id; this.lastRoomId = found.room.id;
+          this.currentView = 'roomDetail'; this.scanStatus = 'ready';
+        },
+        async handleSession(session) {
+          if (!session) return;
+          if (this.user && this.user.id === session.user.id) return;
+          const md = session.user.user_metadata || {};
+          this.user = { id: session.user.id, email: session.user.email, name: md.full_name || md.name || session.user.email, picture: md.avatar_url || md.picture || '' };
+          this.syncState = 'saving';
+          try {
+            const { data, error } = await sb.from('projects').select('data').eq('owner', this.user.id).maybeSingle();
+            if (error) throw error;
+            if (data && data.data && (data.data.rooms || data.data.tradies)) {
+              this.rooms = data.data.rooms || []; this.tradies = data.data.tradies || [];
+              this.migrateTasks();
+            } else {
+              // first sign-in: keep what's on this device unless it belonged to a different account
+              if (this._cacheOwner && this._cacheOwner !== this.user.id) { this.rooms = []; this.tradies = []; }
+              await this.saveCloud();
+            }
+            this._cacheOwner = this.user.id;
+            this.cloudReady = true;
+            this.syncState = 'saved';
+            this.persist();
+          } catch (e) {
+            console.warn(e); this.syncState = 'error';
+            this.showToast('Couldn\u2019t reach your cloud save yet. Check the setup steps.');
+          }
+        },
+        async saveCloud() {
+          if (!sb || !this.user || this.lockedToRoom) return;
+          this.syncState = 'saving';
+          const doc = JSON.parse(JSON.stringify({ rooms: this.rooms, tradies: this.tradies }));
+          const { error } = await sb.from('projects').upsert({ owner: this.user.id, data: doc, updated_at: new Date().toISOString() }, { onConflict: 'owner' });
+          this.syncState = error ? 'error' : 'saved';
+          if (error) console.warn(error);
+        },
+        async signIn() {
+          if (!sb) return this.showToast('Cloud sign-in isn\u2019t available right now.');
+          const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin + window.location.pathname } });
+          if (error) this.showToast('Couldn\u2019t start Google sign-in.');
+        },
+        async signOut() {
+          if (sb) await sb.auth.signOut();
+          this.user = null; this.cloudReady = false; this.syncState = 'idle';
+          this.showToast('Signed out.');
         },
         onPop(e) {
           if (this.lockedToRoom) return;
           this.closeAllModals();
-          const s = e.state;
-          if (s && s.view === 'roomDetail' && this.rooms.some(r => r.id === s.roomId)) {
-            this.currentView = 'roomDetail'; this.activeRoomId = s.roomId;
-          } else if (s && (s.view === 'team' || s.view === 'tags')) {
-            this.currentView = s.view; this.activeRoomId = null;
-          } else {
-            this.currentView = 'dashboard'; this.activeRoomId = null;
-          }
+          const st = e.state;
+          let view = 'dashboard', id = null;
+          if (st && st.view === 'roomDetail' && this.rooms.some(r => r.id === st.roomId)) { view = 'roomDetail'; id = st.roomId; }
+          else if (st && (st.view === 'team' || st.view === 'tags')) view = st.view;
+          this.swap(view, id);
         },
 
         // ---------------- derived ----------------
@@ -361,16 +434,22 @@
         },
 
         // ---------------- navigation ----------------
+        async swap(view, roomId) {
+          const tok = ++this._navTok;
+          const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+          if (!calm) { this.fading = true; await new Promise(r => setTimeout(r, 260)); }
+          if (tok !== this._navTok) return;
+          this.currentView = view; this.activeRoomId = roomId;
+          if (roomId) this.lastRoomId = roomId;
+          window.scrollTo(0, 0);
+          await this.$nextTick();
+          this.fading = false;
+        },
         go(view, roomId = null) {
           this.closeAllModals();
           if (view === this.currentView && roomId === this.activeRoomId) return;
-          this.currentView = view;
-          this.activeRoomId = roomId;
-          if (roomId) this.lastRoomId = roomId;
-          if (!this.lockedToRoom) {
-            try { history.pushState({ view, roomId }, ''); } catch (e) {}
-          }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          if (!this.lockedToRoom) { try { history.pushState({ view, roomId }, ''); } catch (e) {} }
+          this.swap(view, roomId);
         },
         goDashboard() { if (!this.lockedToRoom) this.go('dashboard'); },
         goTeam() { if (!this.lockedToRoom) this.go('team'); },
@@ -387,7 +466,7 @@
         saveRoom() {
           const name = this.newRoom.name.trim();
           if (!name) return this.showToast('Give the room a name first.');
-          const id = 'rm-' + Date.now();
+          const id = 'r' + (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '').slice(0, 16) : Date.now().toString(36) + Math.random().toString(36).slice(2, 8));
           const qrId = this.newRoom.customQrId.trim() || 'QR-' + Math.floor(1000 + Math.random() * 9000);
           const created = { id, name, qrCodeId: qrId, tasks: [] };
           this.rooms.push(created);
@@ -448,9 +527,21 @@
           const tradeIds = [...this.newTask.tradeIds];
           let attachment = existing?.attachment || null;
           if (this._pendingFile) {
-            const f = this._pendingFile, id = 'f-' + Date.now();
-            try { await idbPut(id, { blob: f, name: f.name, type: f.type }); attachment = { id, name: f.name, type: f.type }; }
-            catch (e) { this.showToast('Couldn\u2019t store that file on this device.'); }
+            const f = this._pendingFile; let stored = false;
+            if (sb && this.user) {
+              try {
+                const path = `${this.user.id}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
+                const up = await sb.storage.from('attachments').upload(path, f, { contentType: f.type || undefined });
+                if (up.error) throw up.error;
+                attachment = { path, url: sb.storage.from('attachments').getPublicUrl(path).data.publicUrl, name: f.name, type: f.type };
+                stored = true;
+              } catch (e) { console.warn(e); }
+            }
+            if (!stored) {
+              const id = 'f-' + Date.now();
+              try { await idbPut(id, { blob: f, name: f.name, type: f.type }); attachment = { id, name: f.name, type: f.type }; }
+              catch (e) { this.showToast('Couldn\u2019t store that file.'); }
+            }
             this._pendingFile = null;
           }
           const fields = { title, desc: this.newTask.desc, tradeIds, scheduledAt: this.newTask.scheduledAt || '', attachment, fileName: attachment ? attachment.name : (existing?.fileName || '') };
@@ -473,7 +564,7 @@
         deleteTask(taskId) {
           if (confirm('Delete this task?')) this.activeRoom.tasks = this.activeRoom.tasks.filter(t => t.id !== taskId);
         },
-        toggleTaskDone(task) { task.done = !task.done; },
+        toggleTaskDone(task) { if (this.lockedToRoom) return this.showToast('Only the owner can tick things off for now.'); task.done = !task.done; },
         toggleTaskTradie(id) { const a = this.newTask.tradeIds; this.newTask.tradeIds = a.includes(id) ? a.filter(x => x !== id) : [...a, id]; },
         taskTradieLabel(task) {
           const names = (task.tradeIds || []).map(id => this.tradieById(id)).filter(Boolean).map(t => t.name + ' (' + t.trade.replace(/ \(.*\)/, '') + ')');
@@ -495,6 +586,7 @@
         async openAttachment(task) {
           const a = task.attachment;
           if (!a) return this.showToast('Demo file \u2014 nothing stored to open.');
+          if (a.url) { window.open(a.url, '_blank', 'noopener'); return; }
           const w = window.open('', '_blank');
           try {
             const rec = await idbGet(a.id);
@@ -576,16 +668,16 @@
     </header>
 
     <div x-show="lockedToRoom" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
-      Scanned tag &middot; showing this room only
+      <span x-text="scanStatus === 'loading' ? 'Opening this room\u2026' : scanStatus === 'notfound' ? 'We couldn\u2019t find that room. Ask the owner for a fresh link.' : 'Scanned tag \u00b7 showing this room only'"></span>
     </div>
     <div x-show="!lockedToRoom && viewMode === 'tradie'" x-cloak class="mt-5 text-[13px] px-4 py-3 rounded-2xl flex justify-between items-center t2" style="background:rgba(255,255,255,.12); border:1px solid var(--line);">
       <span>Previewing what a tradie sees</span>
       <button @click="viewMode = 'owner'" class="font-bold underline underline-offset-4 text-white">Exit</button>
     </div>
 
+    <div class="page flex-1 flex flex-col" :class="fading ? 'is-out' : ''">
     <!-- ================= HOUSE ================= -->
     <main x-show="currentView === 'dashboard'" x-cloak
-          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
           class="flex-1 pt-12 space-y-8">
 
       <section>
@@ -648,7 +740,6 @@
 
     <!-- ================= ROOM ================= -->
     <main x-show="currentView === 'roomDetail' && activeRoom" x-cloak
-          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
           class="flex-1 pt-8 space-y-7">
 
       <div class="flex items-center justify-between">
@@ -678,7 +769,7 @@
       </section>
 
       <div class="flex gap-3">
-        <button @click="openAddTaskModal()" class="btn-white flex-1 flex items-center justify-center gap-2">
+        <button x-show="!lockedToRoom" @click="openAddTaskModal()" class="btn-white flex-1 flex items-center justify-center gap-2">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
           Add a task
         </button>
@@ -730,12 +821,36 @@
 
     <!-- ================= TEAM ================= -->
     <main x-show="currentView === 'team'" x-cloak
-          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
           class="flex-1 pt-12 space-y-8">
 
       <section>
         <h1 class="serif hero">Your team.</h1>
         <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="tradies.length === 0 ? 'No one yet. Add your first tradie.' : 'Add someone once, then pick them whenever you log a task.'"></p>
+      </section>
+
+      <section class="glass p-5 space-y-4">
+        <template x-if="!user">
+          <div class="space-y-4">
+            <div>
+              <h3 class="serif text-[28px] leading-none">Save to the cloud</h3>
+              <p class="t2 text-[14px] leading-relaxed mt-3">Sign in so your site is saved online and tradies can scan stickers from their own phones.</p>
+            </div>
+            <button @click="signIn()" class="btn-white w-full">Continue with Google</button>
+          </div>
+        </template>
+        <template x-if="user">
+          <div class="space-y-4">
+            <div class="flex items-center gap-3">
+              <img x-show="user.picture" :src="user.picture" alt="" class="w-11 h-11 rounded-full flex-none" referrerpolicy="no-referrer">
+              <div class="min-w-0">
+                <p class="font-semibold text-[15px] truncate" x-text="user.name"></p>
+                <p class="t2 text-[12px] truncate" x-text="user.email"></p>
+              </div>
+            </div>
+            <p class="t2 text-[13px]" x-text="syncState === 'saving' ? 'Saving\u2026' : syncState === 'error' ? 'Couldn\u2019t save to the cloud. Your changes are safe on this device.' : 'Saved to the cloud.'"></p>
+            <button @click="signOut()" class="btn-glass w-full">Sign out</button>
+          </div>
+        </template>
       </section>
 
       <button @click="openAddTradeModal()" class="btn-white w-full flex items-center justify-center gap-2">
@@ -764,12 +879,13 @@
 
     <!-- ================= TAGS ================= -->
     <main x-show="currentView === 'tags'" x-cloak
-          x-transition:enter="transition ease-out duration-700" x-transition:enter-start="opacity-0 translate-y-3" x-transition:enter-end="opacity-100 translate-y-0"
           class="flex-1 pt-12 space-y-7">
       <section>
         <h1 class="serif hero">Tags.</h1>
         <p class="t2 text-[16px] leading-snug mt-5 max-w-[30ch]" x-text="rooms.length === 0 ? 'Add a room first and its sticker will live here.' : 'Tap the stickers you want to print.'"></p>
       </section>
+
+      <p x-show="!user" class="t2 text-[13px] leading-relaxed glass p-4">Sign in on the Team tab first, so these stickers open your real rooms on other phones.</p>
 
       <div x-show="rooms.length > 0" class="flex items-center justify-between gap-3">
         <span class="t2 text-[13px] font-semibold" x-text="selectedRooms.length + ' of ' + rooms.length + ' selected'"></span>
@@ -800,8 +916,10 @@
               x-text="selectedRooms.length ? 'Print ' + selectedRooms.length + (selectedRooms.length === 1 ? ' sticker' : ' stickers') : 'Select stickers to print'"></button>
     </main>
 
+    </div>
+
     <!-- ================= MODAL: ADD ROOM ================= -->
-    <div x-show="showAddRoomModal" x-cloak class="scrim">
+    <div x-show="showAddRoomModal" x-cloak x-transition.opacity.duration.300ms class="scrim">
       <div @click.outside="showAddRoomModal = false" class="sheet space-y-5">
         <div class="flex justify-between items-center">
           <h3 class="serif text-[30px] leading-none">New room</h3>
@@ -827,7 +945,7 @@
     </div>
 
     <!-- ================= MODAL: DELETE ROOM ================= -->
-    <div x-show="showDeleteRoomModal" x-cloak class="scrim" style="align-items:center;">
+    <div x-show="showDeleteRoomModal" x-cloak x-transition.opacity.duration.300ms class="scrim" style="align-items:center;">
       <div @click.outside="showDeleteRoomModal = false" class="sheet text-center space-y-5">
         <div>
           <h3 class="serif text-[30px] leading-none">Delete room?</h3>
@@ -841,7 +959,7 @@
     </div>
 
     <!-- ================= MODAL: ADD TRADIE ================= -->
-    <div x-show="showAddTradeModal" x-cloak class="scrim">
+    <div x-show="showAddTradeModal" x-cloak x-transition.opacity.duration.300ms class="scrim">
       <div @click.outside="showAddTradeModal = false" class="sheet space-y-5">
         <div class="flex justify-between items-center">
           <h3 class="serif text-[30px] leading-none" x-text="editingTradieId ? 'Edit tradie' : 'New tradie'"></h3>
@@ -873,7 +991,7 @@
     </div>
 
     <!-- ================= MODAL: ADD / EDIT TASK ================= -->
-    <div x-show="showAddTaskModal" x-cloak class="scrim">
+    <div x-show="showAddTaskModal" x-cloak x-transition.opacity.duration.300ms class="scrim">
       <div @click.outside="showAddTaskModal = false" class="sheet space-y-5">
         <div class="flex justify-between items-center gap-3">
           <h3 class="serif text-[30px] leading-none" x-text="editingTaskId ? 'Edit task' : 'New task'"></h3>
@@ -913,7 +1031,7 @@
     </div>
 
     <!-- ================= MODAL: SINGLE ROOM QR ================= -->
-    <div x-show="showQrPreviewModal" x-cloak class="scrim" style="align-items:center;">
+    <div x-show="showQrPreviewModal" x-cloak x-transition.opacity.duration.300ms class="scrim" style="align-items:center;">
       <div @click.outside="showQrPreviewModal = false" class="sheet text-center space-y-5" style="max-width:320px;">
         <div>
           <span class="t3 text-[12px] font-semibold uppercase tracking-widest">Room tag</span>
@@ -932,7 +1050,7 @@
     </div>
 
     <!-- ================= MODAL: NOTIFY TRADIES ================= -->
-    <div x-show="showNotifyModal" x-cloak class="scrim" style="align-items:center;">
+    <div x-show="showNotifyModal" x-cloak x-transition.opacity.duration.300ms class="scrim" style="align-items:center;">
       <div @click.outside="showNotifyModal = false" class="sheet space-y-5">
         <div class="flex justify-between items-center">
           <h3 class="serif text-[30px] leading-none">Notify</h3>
